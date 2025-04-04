@@ -123,3 +123,13 @@ def test_train(tokenizer):
     for i in range(256): 
         assert i in tokenizer.tokenToByte
         assert tokenizer.tokenToByte[i] == bytes([i])
+
+def test_encode_validation(tokenizer): 
+    with pytest.raises(TypeError,match = "Input text should be in string form"): 
+        tokenizer.encode(2)
+
+
+def test_encode_decode(tokenizer,sample_text):
+
+    encoded_tokens = tokenizer.encode(sample_text)
+    assert tokenizer.decode(encoded_tokens) == sample_text

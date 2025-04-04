@@ -1,30 +1,3 @@
-"""
-PseudoCode
-
-encoding 
-
-    create chunks of input text 
-    encoded_chunks = []
-    for each chunk 
-        if len(chunk) < 2 
-            encoded_chunks.add(list(chunk.encode("utf-8"))[0])
-            continue
-        get the pair from merges dict that has the least token id and is present in the chunk 
-        while you can get this pair 
-            replace this pair by the corresponding token id in the merges dict 
-
-        chunk.add(endoftext_token)
-        encoded_chunks.add(chunk)
-
-    flatten the encoded chunks
-    return them
-
-decoding 
-
-    bytes_rep = b''.join([vocab[idx] for idx in input_tokens])
-    return bytes_rep.decode("utf-8",error = "replace")
-
-"""
 import os
 import json 
 import re
@@ -164,6 +137,140 @@ class LLMTokenizer:
             with open(self.pretty_tokenToByte_store_path,'w') as f: 
                 json.dump(pretty_tokenToByte,f)
 
+
+
+    def encode(self,text: str) -> list[int]: 
+        """
+        Encodes the given text (in string form) into a list of token ids 
+        Args: 
+            text (str): input text in string form
+        Returns: 
+            a list of token ids representing the encoded text
+        Raises: 
+            TypeError if input text is not in string form
+            FileNotFoundError if the serialized merges dict file is not found 
+        """
+
+        # input validation 
+        if not isinstance(text,str): 
+            raise TypeError("Input text should be in string form")
+        
+        # check for existence of merges dict file 
+        if not os.path.isfile(self.merges_store_path):
+            raise FileNotFoundError(f"The {self.merges_store_path} file not found")
+
+        # load the merges dict from disk 
+        with open(self.merges_store_path, 'rb') as f:
+            self.merges = pickle.load(f)
+
+        # regex pattern to divide text into chunks by special_tokens
+        pattern = '|'.join(map(re.escape,self.special_tokens))
+
+        # find the special tokens in the text
+        matches = list(re.finditer(pattern, text))
+
+        # starting index of current chunk 
+        start = 0
+
+        # output tokens list
+        tokens = []
+
+        for match in matches: 
+            # indices of special_token
+            special_start,special_end = match.span()
+
+            # encode the current chunk 
+            self._encode_chunk(text[start:special_start],tokens)
+
+            # append the special token 
+            tokens.append(self.special_token_idMap[match.group()])
+
+            # update start to move on the next chunk 
+            start = special_end
+
+        # encode the last chunk 
+        if start < len(text): 
+            self._encode_chunk(text[start:],tokens)
+
+
+        return tokens
+    
+    def decode(self,tokens: list[int]) -> str: 
+        """
+        Decodes a list of numerical tokens back into string form 
+        Args: 
+            tokens (list[int]): the list of input tokens
+        Returns: 
+            Decoded form of the tokens
+        Raises: 
+            TypeError if the tokens is not a list of ints
+            FileNotFoundError if the tokenToByte dict file is not found
+        """
+
+        # input validation 
+        if not isinstance(tokens,list): 
+            raise TypeError("tokens must be a list")
+        if not all(isinstance(token,int) for token in tokens): 
+            raise TypeError("Each token must be an int")
+        if not os.path.isfile(self.tokenToByte_store_path): 
+            raise FileNotFoundError(f"The {self.tokenToByte_store_path} file not found")
+        
+        # load the tokenToByte dict from disk 
+        with open(self.tokenToByte_store_path, 'rb') as f: 
+            self.tokenToByte = pickle.load(f) 
+
+        byte_string = b''.join(self.tokenToByte[token] for token in tokens)
+
+        return byte_string.decode('utf-8',errors='replace')
+
+    def _encode_chunk(self,chunk: str, tokens: list[int]):
+        """
+        Encodes an individual chunk (which does not contain special tokens)
+
+        Args: 
+            chunk (str): individual chunk to be encoded
+            tokens (list[int]): list of tokens in which the encoded tokens are to be appended
+        """    
+
+     
+        # first encode the chunk using utf-8 
+        chunk_tokens = list(chunk.encode('utf-8'))
+
+        # simply append the encoded first token only if the chunk's length is 1
+        if len(chunk_tokens) == 1: 
+            tokens.append(chunk_tokens[0])
+            return 
+        elif not chunk_tokens: 
+            return
+        
+        # merge the bigrams in increasing order of their token ids 
+        while True: 
+            bigram = self._get_bigram_with_min_token_id(chunk_tokens)
+            if bigram not in self.merges: 
+                break
+            # taking the element at 0th index because the below method returns a list of lists
+            chunk_tokens = self._replace_with_token_id([chunk_tokens],self.merges[bigram],bigram)[0]
+        
+        tokens.extend(chunk_tokens)
+                
+    
+    def _get_bigram_with_min_token_id(self,tokens: list[int]) -> tuple[int,int]: 
+        """
+        Returns a bigram from the text which has the lowest token id in the merges dict
+        Args: 
+            tokens (list[int]): list of tokens
+        Returns: 
+            bigram with the lowest token id in the merges dict
+        """
+
+        if len(tokens) < 2: 
+            return (-1,-1)
+
+        bigram_set = set()
+        for i in range(len(tokens) - 1): 
+            bigram_set.add((tokens[i],tokens[i + 1]))
+
+        return min(bigram_set,key = lambda bigram : self.merges.get(bigram,float('inf')))
 
     def _replace_with_token_id(self, tokens: list[list[int]], token_id: int, bigram: tuple[int,int]) -> list[list[int]]: 
 
