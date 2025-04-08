@@ -11,7 +11,7 @@ class LLMTokenizer:
         Initializes the tokenizer class 
         Token Arrangement ->  0 - 255                                           (single byte tokens)
                               256 - (256 + num_special_tokens - 1)              (special tokens)
-                              (256 + num_special_tokens) - (vocab_size - 1)     (merged tokens formed during tokenization)
+                              (256 + num_special_tokens) - (vocab_size - 1)     (merged tokens created during tokenization)
           
         Args: 
             vocab_size (int): The vocabulary size i.e. total number of tokens of the tokenizer 
@@ -70,7 +70,7 @@ class LLMTokenizer:
         self.tokenToByte_store_path = os.path.join(self.storage_dir,"tokenToByte.pkl")
         self.pretty_tokenToByte_store_path = os.path.join(self.storage_dir,"tokenToByte.json")
 
-        # special_token_ids stores the token ids of the special tokens
+        # special_token_idMap stores the token ids of the special tokens
         self.special_token_idMap = {}
         for i,token in enumerate(self.special_tokens):
             self.special_token_idMap[token] = 256 + i
@@ -91,9 +91,13 @@ class LLMTokenizer:
         if not os.path.isfile(input_file_path):
             raise ValueError("input file does not exist at the specified path")
 
-        with open(input_file_path,'r',encoding = 'utf-8') as f: 
-            text = f.read()
-
+        # reading the input file and validating if it can be encoded into utf-8
+        try: 
+            with open(input_file_path,'r',encoding = 'utf-8') as f: 
+                text = f.read()
+        except UnicodeDecodeError: 
+            raise ValueError("Input text file could not be decoded into utf-8")
+        
         # chunk the text using special_tokens and encode the chunks using utf-8
         tokens = self._chunk_text(text)
 
@@ -124,6 +128,7 @@ class LLMTokenizer:
             if self.verbose:
                 print(f"{self.tokenToByte[bigram[0]].decode('utf-8',errors='replace')} and {self.tokenToByte[bigram[1]].decode('utf-8',errors='replace')} got merged into {self.tokenToByte[new_token_id].decode('utf-8',errors='replace')}")
                 print(f"vocab_size got updated to {curr_vocab_size}")
+                print()
 
         # save the merges and tokenToByte dicts to disk 
         with open(self.merges_store_path,'wb') as f: 
@@ -246,7 +251,10 @@ class LLMTokenizer:
 
      
         # first encode the chunk using utf-8 
-        chunk_tokens = list(chunk.encode('utf-8'))
+        try: 
+            chunk_tokens = list(chunk.encode('utf-8'))
+        except UnicodeEncodeError: 
+            raise ValueError("Input text can't be encoded into utf-8")
 
         # simply append the encoded first token only if the chunk's length is 1
         if len(chunk_tokens) == 1: 

@@ -100,6 +100,10 @@ def test_train_validation(tokenizer):
         tokenizer.train("random.txt")
     assert str(excinfo.value) == "input file does not exist at the specified path"
 
+    with pytest.raises(ValueError) as excinfo: 
+        tokenizer.train("data/latin1.txt")
+    assert str(excinfo.value) == "Input text file could not be decoded into utf-8"
+
 
 def test_special_token_handling(tokenizer): 
     assert tokenizer.special_token_idMap["<|endoftext|>"] == 256
@@ -141,9 +145,15 @@ def test_train(tokenizer):
         assert tokenizer.tokenToByte[i] == bytes([i])
 
 def test_encode_validation(tokenizer): 
+    # input text type validation 
     with pytest.raises(TypeError) as excinfo: 
         tokenizer.encode(2)
     assert str(excinfo.value) == "Input text should be in string form"
+
+    with pytest.raises(ValueError) as excinfo: 
+        tokenizer.encode("\ud800")
+    assert str(excinfo.value) == "Input text can't be encoded into utf-8"
+
 
 def test_decode_validation(tokenizer): 
 
