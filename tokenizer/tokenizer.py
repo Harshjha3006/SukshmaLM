@@ -17,7 +17,7 @@ class LLMTokenizer:
             vocab_size (int): The vocabulary size i.e. total number of tokens of the tokenizer 
             special_tokens (list[str]): list of special_tokens in string form , eg -> ["<|endoftext|>", "<|im_start|>"]
         Raises: 
-            ValueError: if vocab_size is too small or special tokens are invalid
+            ValueError: if vocab_size is too small or special tokens are invalid or they overlap 
             TypeError: if vocab_size is not an integer or special tokens is not a list of strings 
         """
 
@@ -39,11 +39,14 @@ class LLMTokenizer:
             raise ValueError("all special tokens must be unique")
         if any(not token for token in special_tokens):
             raise ValueError("all special tokens must be non empty")
-        for token in special_tokens:
+        for i,token in enumerate(special_tokens):
             try: 
                 token.encode("utf-8")
             except UnicodeEncodeError:
                 raise ValueError(f"Special token {token} can't be encoded in utf-8")
+            for token2 in special_tokens[i + 1:]:
+                if token in token2 or token2 in token: 
+                    raise ValueError(f"Special tokens {token} and {token2} overlap")
             
 
         # initializations
@@ -51,16 +54,21 @@ class LLMTokenizer:
         self.special_tokens = special_tokens
         self.verbose = verbose
 
+        # path of directory where output files of the tokenizer would be stored
+        self.storage_dir = "tokenizer"
+        # create this directory if it does not exist
+        os.makedirs(self.storage_dir,exist_ok=True)
+
         # merges dict stores the mapping from a bigram of token ids to a new token id 
         self.merges = {}
-        self.merges_store_path = "tokenizer/merges.pkl"
-        self.pretty_merges_store_path = "tokenizer/merges.json"
+        self.merges_store_path = os.path.join(self.storage_dir,"merges.pkl")
+        self.pretty_merges_store_path = os.path.join(self.storage_dir,"merges.json")
 
         # tokenToByte stores the byte representation of each token 
         # compute the byte representation of all single byte tokens 
         self.tokenToByte = {i : bytes([i]) for i in range(256)}
-        self.tokenToByte_store_path = "tokenizer/tokenToByte.pkl"
-        self.pretty_tokenToByte_store_path = "tokenizer/tokenToByte.json"
+        self.tokenToByte_store_path = os.path.join(self.storage_dir,"tokenToByte.pkl")
+        self.pretty_tokenToByte_store_path = os.path.join(self.storage_dir,"tokenToByte.json")
 
         # special_token_ids stores the token ids of the special tokens
         self.special_token_idMap = {}
@@ -205,6 +213,7 @@ class LLMTokenizer:
         Raises: 
             TypeError if the tokens is not a list of ints
             FileNotFoundError if the tokenToByte dict file is not found
+            ValueError if tokens are out of valid range 
         """
 
         # input validation 
@@ -214,6 +223,9 @@ class LLMTokenizer:
             raise TypeError("Each token must be an int")
         if not os.path.isfile(self.tokenToByte_store_path): 
             raise FileNotFoundError(f"The {self.tokenToByte_store_path} file not found")
+        for token in tokens: 
+            if not 0 <= token < self.vocab_size:
+                raise ValueError(f"Token id {token} is out of valid range [0 - {self.vocab_size - 1}]")
         
         # load the tokenToByte dict from disk 
         with open(self.tokenToByte_store_path, 'rb') as f: 

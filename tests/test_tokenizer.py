@@ -14,32 +14,44 @@ def tokenizer():
 def test_init_validations():
 
     # testing vocab_size type validation
-    with pytest.raises(TypeError,match = "vocab_size must be an integer"): 
+    with pytest.raises(TypeError) as excinfo: 
         LLMTokenizer(vocab_size="vocab",special_tokens=["endoftext"])
+    assert str(excinfo.value) == "vocab_size must be an integer"
 
     # testing special_tokens list validation
-    with pytest.raises(TypeError,match = "special_tokens must be a list"): 
+    with pytest.raises(TypeError) as excinfo: 
         LLMTokenizer(vocab_size=500, special_tokens="special")
+    assert str(excinfo.value) == "special_tokens must be a list"
 
     # testing special_tokens token type validation
-    with pytest.raises(TypeError,match = "each token in special_tokens must be a str"): 
+    with pytest.raises(TypeError) as excinfo: 
         LLMTokenizer(vocab_size=500, special_tokens=[30,"hello"])
+    assert str(excinfo.value) == "each token in special_tokens must be a str"
 
     # testing vocab_size value validation
-    with pytest.raises(ValueError,match = re.escape("vocab_size must be >= 256 + num_special_tokens")): 
+    with pytest.raises(ValueError) as excinfo: 
         LLMTokenizer(vocab_size=257,special_tokens=["hello","hi"])
+    assert str(excinfo.value) == "vocab_size must be >= 256 + num_special_tokens"
 
     # testing special tokens uniqueness validation 
-    with pytest.raises(ValueError,match = "all special tokens must be unique"): 
+    with pytest.raises(ValueError) as excinfo: 
         LLMTokenizer(vocab_size=300, special_tokens=["<|endoftext|>","<|endoftext|>"])
+    assert str(excinfo.value) == "all special tokens must be unique"
 
     # testing special tokens non emptiness validation
-    with pytest.raises(ValueError,match = "all special tokens must be non empty"): 
+    with pytest.raises(ValueError) as excinfo: 
         LLMTokenizer(vocab_size=300, special_tokens=["hello",""])
+    assert str(excinfo.value) == "all special tokens must be non empty"
 
     # testing special tokens encoding validation 
-    with pytest.raises(ValueError,match = "Special token \ud800 can't be encoded in utf-8"):
+    with pytest.raises(ValueError) as excinfo:
         LLMTokenizer(vocab_size=300,special_tokens=["hello", "\ud800"])
+    assert str(excinfo.value) == "Special token \ud800 can't be encoded in utf-8"
+
+    # testing special tokens overlap validation 
+    with pytest.raises(ValueError) as excinfo:
+        LLMTokenizer(vocab_size=500,special_tokens=["<|endoftext|>", "<|endoftext|>extra"])
+    assert str(excinfo.value) == "Special tokens <|endoftext|> and <|endoftext|>extra overlap"
 
 
 def test_chunk_test(tokenizer,sample_text): 
@@ -58,11 +70,13 @@ def test_get_most_freq_bigram(tokenizer):
     tokens = [[1,2,1,3,1,2],[1,3,4,3,1,3]]
     bigram = tokenizer._get_most_freq_bigram(tokens)
     assert bigram == (1,3)
-    with pytest.raises(ValueError,match = "No bigrams were found in the input tokens"): 
+    with pytest.raises(ValueError) as excinfo: 
         bigram = tokenizer._get_most_freq_bigram([[1],[2]])
+    assert str(excinfo.value) == "No bigrams were found in the input tokens"
 
-    with pytest.raises(ValueError,match = "No bigrams were found in the input tokens"): 
+    with pytest.raises(ValueError) as excinfo: 
         bigram = tokenizer._get_most_freq_bigram([[],[]])
+    assert str(excinfo.value) == "No bigrams were found in the input tokens"
 
 
 def test_replace_with_token_id(tokenizer): 
@@ -78,11 +92,13 @@ def test_replace_with_token_id(tokenizer):
 
 
 def test_train_validation(tokenizer): 
-    with pytest.raises(TypeError,match = "input_file_path must be a str"):
+    with pytest.raises(TypeError) as excinfo:
         tokenizer.train(2)
+    assert str(excinfo.value) == "input_file_path must be a str"
 
-    with pytest.raises(ValueError,match = "input file does not exist at the specified path"):
+    with pytest.raises(ValueError) as excinfo:
         tokenizer.train("random.txt")
+    assert str(excinfo.value) == "input file does not exist at the specified path"
 
 
 def test_special_token_handling(tokenizer): 
@@ -125,8 +141,26 @@ def test_train(tokenizer):
         assert tokenizer.tokenToByte[i] == bytes([i])
 
 def test_encode_validation(tokenizer): 
-    with pytest.raises(TypeError,match = "Input text should be in string form"): 
+    with pytest.raises(TypeError) as excinfo: 
         tokenizer.encode(2)
+    assert str(excinfo.value) == "Input text should be in string form"
+
+def test_decode_validation(tokenizer): 
+
+    # testing whether all input tokens are in the tokenizer vocab 
+    with pytest.raises(ValueError) as excinfo: 
+        tokenizer.decode([1,2000])
+    assert str(excinfo.value) == f"Token id 2000 is out of valid range [0 - {tokenizer.vocab_size - 1}]"
+
+    # testing whether tokens are a list
+    with pytest.raises(TypeError) as excinfo: 
+        tokenizer.decode(200)
+    assert str(excinfo.value) == "tokens must be a list"
+
+    # testing input tokens type 
+    with pytest.raises(TypeError) as excinfo: 
+        tokenizer.decode([200,"10"])
+    assert str(excinfo.value) == "Each token must be an int"
 
 
 def test_encode_decode(tokenizer,sample_text):
