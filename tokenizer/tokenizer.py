@@ -32,7 +32,7 @@ class LLMTokenizer:
 
         # Value validations
         # if vocab_size = 256 + len(special_tokens) then no merges will be performed and it will be equivalent
-        # to a char level tokenizer with special tokens 
+        # to a single byte level tokenizer with special tokens 
         if vocab_size < 256 + len(special_tokens):
             raise ValueError("vocab_size must be >= 256 + num_special_tokens")
         if len(special_tokens) != len(set(special_tokens)):
@@ -43,7 +43,7 @@ class LLMTokenizer:
             try: 
                 token.encode("utf-8")
             except UnicodeEncodeError:
-                raise ValueError(f"Special token {token} can't be encoded in utf-8")
+                raise ValueError(f"Special token {token} can't be encoded into utf-8")
             for token2 in special_tokens[i + 1:]:
                 if token in token2 or token2 in token: 
                     raise ValueError(f"Special tokens {token} and {token2} overlap")
@@ -65,6 +65,7 @@ class LLMTokenizer:
         self.pretty_merges_store_path = os.path.join(self.storage_dir,"merges.json")
 
         # tokenToByte stores the byte representation of each token 
+
         # compute the byte representation of all single byte tokens 
         self.tokenToByte = {i : bytes([i]) for i in range(256)}
         self.tokenToByte_store_path = os.path.join(self.storage_dir,"tokenToByte.pkl")
@@ -83,27 +84,31 @@ class LLMTokenizer:
             input_file_path (str): path of the training data 
         Raises: 
             TypeError: if input_file_path is not a str
-            ValueError: if the input file does not exist at the specified input path 
+            ValueError: if the input file does not exist at the specified input path or if the training data can't be decoded into utf-8
         """
 
+        print("Performing Validations ...")
         if not isinstance(input_file_path,str):
             raise TypeError("input_file_path must be a str")
         if not os.path.isfile(input_file_path):
             raise ValueError("input file does not exist at the specified path")
 
-        # reading the input file and validating if it can be encoded into utf-8
+        print("Reading training data ...")
+        # reading the input file and validating if it can be decoded into utf-8
         try: 
             with open(input_file_path,'r',encoding = 'utf-8') as f: 
                 text = f.read()
         except UnicodeDecodeError: 
             raise ValueError("Input text file could not be decoded into utf-8")
-        
+
+        print("Chunking text ...")        
         # chunk the text using special_tokens and encode the chunks using utf-8
         tokens = self._chunk_text(text)
 
         # set the curr_vocab_size
         curr_vocab_size = 256 + len(self.special_tokens)
 
+        print("Starting to Merge tokens ...")
         # iterate till the required vocab_size has been achieved 
         while curr_vocab_size < self.vocab_size: 
             # get the most frequent token bigram from the chunks
@@ -130,6 +135,7 @@ class LLMTokenizer:
                 print(f"vocab_size got updated to {curr_vocab_size}")
                 print()
 
+        print("Saving output files ...")
         # save the merges and tokenToByte dicts to disk 
         with open(self.merges_store_path,'wb') as f: 
             pickle.dump(self.merges,f)
@@ -150,6 +156,7 @@ class LLMTokenizer:
             with open(self.pretty_tokenToByte_store_path,'w') as f: 
                 json.dump(pretty_tokenToByte,f)
 
+        print("Training Completed ...")
 
 
     def encode(self,text: str) -> list[int]: 
@@ -163,14 +170,13 @@ class LLMTokenizer:
             TypeError if input text is not in string form
             FileNotFoundError if the serialized merges dict file is not found 
         """
-
         # input validation 
         if not isinstance(text,str): 
             raise TypeError("Input text should be in string form")
         
         # check for existence of merges dict file 
         if not os.path.isfile(self.merges_store_path):
-            raise FileNotFoundError(f"The {self.merges_store_path} file not found")
+            raise FileNotFoundError(f"The merges dict not found at {self.merges_store_path}")
 
         # load the merges dict from disk 
         with open(self.merges_store_path, 'rb') as f:
@@ -188,11 +194,12 @@ class LLMTokenizer:
         # output tokens list
         tokens = []
 
+        # iterate over chunks
         for match in matches: 
-            # indices of special_token
+            # indices of special_token [special_start,special_end)
             special_start,special_end = match.span()
 
-            # encode the current chunk 
+            # encode the current chunk and append it to the output tokens list 
             self._encode_chunk(text[start:special_start],tokens)
 
             # append the special token 
@@ -227,9 +234,9 @@ class LLMTokenizer:
         if not all(isinstance(token,int) for token in tokens): 
             raise TypeError("Each token must be an int")
         if not os.path.isfile(self.tokenToByte_store_path): 
-            raise FileNotFoundError(f"The {self.tokenToByte_store_path} file not found")
+            raise FileNotFoundError(f"The tokenToByte dict not found at {self.tokenToByte_store_path}")
         for token in tokens: 
-            if not 0 <= token < self.vocab_size:
+            if not (0 <= token < self.vocab_size):
                 raise ValueError(f"Token id {token} is out of valid range [0 - {self.vocab_size - 1}]")
         
         # load the tokenToByte dict from disk 
@@ -295,7 +302,7 @@ class LLMTokenizer:
     def _replace_with_token_id(self, tokens: list[list[int]], token_id: int, bigram: tuple[int,int]) -> list[list[int]]: 
 
         """
-        Replaces the bigram with the provided token id 
+        Replaces the bigram with the provided token id and returns a new tokens list
         Args: 
             tokens (list[list[int]]): the original list of tokens
             token_id (int) : the token_id which will replace the provided bigram
@@ -384,5 +391,5 @@ if __name__ == "__main__":
     # transform args to dict form
     args = vars(args)
 
-    tokenizer = LLMTokenizer(args["vocab_size"], args["special_tokens"],verbose = args["verbose"])
+    tokenizer = LLMTokenizer(args["vocab_size"], args["special_tokens"],args["verbose"])
     tokenizer.train(args["file_path"])

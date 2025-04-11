@@ -46,7 +46,7 @@ def test_init_validations():
     # testing special tokens encoding validation 
     with pytest.raises(ValueError) as excinfo:
         LLMTokenizer(vocab_size=300,special_tokens=["hello", "\ud800"])
-    assert str(excinfo.value) == "Special token \ud800 can't be encoded in utf-8"
+    assert str(excinfo.value) == "Special token \ud800 can't be encoded into utf-8"
 
     # testing special tokens overlap validation 
     with pytest.raises(ValueError) as excinfo:
