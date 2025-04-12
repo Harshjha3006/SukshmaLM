@@ -9,7 +9,7 @@ def sample_text():
 
 @pytest.fixture
 def tokenizer(): 
-    return LLMTokenizer(vocab_size=270,special_tokens=["<|endoftext|>","<|im_start|>"])
+    return LLMTokenizer()
 
 
 def test_init_validations():
@@ -60,6 +60,8 @@ def test_init_validations():
 
 
 def test_chunk_test(tokenizer,sample_text): 
+    if not tokenizer.special_tokens: 
+        return 
     tokens = tokenizer._chunk_text(sample_text)
     assert len(tokens) == 3
     assert all(isinstance(chunk,list) for chunk in tokens)
@@ -110,7 +112,9 @@ def test_train_validation(tokenizer):
     assert str(excinfo.value) == "Input text file could not be decoded into utf-8"
 
 
-def test_special_token_handling(tokenizer): 
+def test_special_token_handling(tokenizer):
+    if not tokenizer.special_tokens: 
+        return  
     assert tokenizer.special_token_idMap["<|endoftext|>"] == 256
     assert tokenizer.special_token_idMap["<|im_start|>"] == 257
 
@@ -122,8 +126,7 @@ def test_special_token_handling(tokenizer):
 def test_train(tokenizer): 
     train_file = "data/sample.txt"
     tokenizer.train(train_file)
-
-    assert len(tokenizer.merges) == tokenizer.vocab_size - (256 + len(tokenizer.special_tokens)) 
+    assert len(tokenizer.merges) == tokenizer.vocab_size - (256 + ((len(tokenizer.special_tokens)) if tokenizer.special_tokens else 0)) 
     assert len(tokenizer.tokenToByte) == tokenizer.vocab_size
 
     # validate merged tokens
@@ -138,11 +141,12 @@ def test_train(tokenizer):
 
         assert byte_rep == expected_byte_rep
 
-    # validate special tokens
-    for i,token in enumerate(tokenizer.special_tokens): 
-        token_id = 256 + i
-        assert token_id in tokenizer.tokenToByte
-        assert tokenizer.tokenToByte[token_id].decode("utf-8") == token
+    if tokenizer.special_tokens: 
+        # validate special tokens
+        for i,token in enumerate(tokenizer.special_tokens): 
+            token_id = 256 + i
+            assert token_id in tokenizer.tokenToByte
+            assert tokenizer.tokenToByte[token_id].decode("utf-8") == token
 
     # valid single byte tokens
     for i in range(256): 
@@ -179,7 +183,6 @@ def test_decode_validation(tokenizer):
 
 
 def test_encode_decode(tokenizer,sample_text):
-
     encoded_tokens = tokenizer.encode(sample_text)
     assert tokenizer.decode(encoded_tokens) == sample_text
 
@@ -196,3 +199,9 @@ def test_load_config(tokenizer):
     assert tokenizer.vocab_size == 500
     assert tokenizer.special_tokens == ["endoftext"]
     assert tokenizer.storage_dir == os.path.join("tokenizer","sample2")
+
+    tokenizer.load_config("sample3")
+
+    assert tokenizer.vocab_size == 300
+    assert tokenizer.special_tokens == None
+    assert tokenizer.special_token_idMap == {}

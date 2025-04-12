@@ -6,11 +6,11 @@ import pickle
 
 class LLMTokenizer: 
 
-    def __init__(self,vocab_size: int, special_tokens: list[str],config_name: str = "test", verbose: bool = False): 
+    def __init__(self,vocab_size: int = 256, special_tokens: list[str] = None,config_name: str = "test", verbose: bool = False): 
         """
         Initializes the tokenizer class 
         Token Arrangement ->  0 - 255                                           (single byte tokens)
-                              256 - (256 + num_special_tokens - 1)              (special tokens)
+                              256 - (256 + num_special_tokens - 1)              (special tokens if provided)
                               (256 + num_special_tokens) - (vocab_size - 1)     (merged tokens created during tokenization)
           
         Args: 
@@ -26,9 +26,9 @@ class LLMTokenizer:
         # Type validations 
         if not isinstance(vocab_size,int): 
             raise TypeError("vocab_size must be an integer")
-        if not isinstance(special_tokens,list):
+        if special_tokens and not isinstance(special_tokens,list):
             raise TypeError("special_tokens must be a list")
-        if not all(isinstance(token, str) for token in special_tokens):
+        if special_tokens and not all(isinstance(token, str) for token in special_tokens):
             raise TypeError("each token in special_tokens must be a str")
         if not isinstance(config_name, str): 
             raise TypeError("config_name must be a str")
@@ -37,20 +37,21 @@ class LLMTokenizer:
         # Value validations
         # if vocab_size = 256 + len(special_tokens) then no merges will be performed and it will be equivalent
         # to a single byte level tokenizer with special tokens 
-        if vocab_size < 256 + len(special_tokens):
+        if vocab_size < 256 + (len(special_tokens) if special_tokens else 0):
             raise ValueError("vocab_size must be >= 256 + num_special_tokens")
-        if len(special_tokens) != len(set(special_tokens)):
+        if special_tokens and len(special_tokens) != len(set(special_tokens)):
             raise ValueError("all special tokens must be unique")
-        if any(not token for token in special_tokens):
+        if special_tokens and any(not token for token in special_tokens):
             raise ValueError("all special tokens must be non empty")
-        for i,token in enumerate(special_tokens):
-            try: 
-                token.encode("utf-8")
-            except UnicodeEncodeError:
-                raise ValueError(f"Special token {token} can't be encoded into utf-8")
-            for token2 in special_tokens[i + 1:]:
-                if token in token2 or token2 in token: 
-                    raise ValueError(f"Special tokens {token} and {token2} overlap")
+        if special_tokens: 
+            for i,token in enumerate(special_tokens):
+                try: 
+                    token.encode("utf-8")
+                except UnicodeEncodeError:
+                    raise ValueError(f"Special token {token} can't be encoded into utf-8")
+                for token2 in special_tokens[i + 1:]:
+                    if token in token2 or token2 in token: 
+                        raise ValueError(f"Special tokens {token} and {token2} overlap")
             
 
         # initializations
@@ -78,9 +79,10 @@ class LLMTokenizer:
 
         # special_token_idMap stores the token ids of the special tokens
         self.special_token_idMap = {}
-        for i,token in enumerate(self.special_tokens):
-            self.special_token_idMap[token] = 256 + i
-            self.tokenToByte[self.special_token_idMap[token]] = token.encode('utf-8') 
+        if special_tokens: 
+            for i,token in enumerate(self.special_tokens):
+                self.special_token_idMap[token] = 256 + i
+                self.tokenToByte[self.special_token_idMap[token]] = token.encode('utf-8') 
 
     def train(self, input_file_path: str): 
         """
@@ -106,12 +108,15 @@ class LLMTokenizer:
         except UnicodeDecodeError: 
             raise ValueError("Input text file could not be decoded into utf-8")
 
-        print("Chunking text ...")        
-        # chunk the text using special_tokens and encode the chunks using utf-8
-        tokens = self._chunk_text(text)
+        print("Encoding text into utf-8 and chunking it if special_tokens are provided ...")        
+        if self.special_tokens: 
+            # chunk the text using special_tokens and encode the chunks using utf-8
+            tokens = self._chunk_text(text)
+        else: 
+            tokens = [list(text.encode('utf-8'))]
 
         # set the curr_vocab_size
-        curr_vocab_size = 256 + len(self.special_tokens)
+        curr_vocab_size = 256 + (len(self.special_tokens) if (self.special_tokens) else 0)
 
         print("Starting to Merge tokens ...")
         # iterate till the required vocab_size has been achieved 
@@ -231,6 +236,12 @@ class LLMTokenizer:
         if not isinstance(text,str): 
             raise TypeError("Input text should be in string form")
         
+        # Handle case where there are no special tokens
+        if not self.special_tokens:
+            tokens = []
+            self._encode_chunk(text, tokens)
+            return tokens
+
         # regex pattern to divide text into chunks by special_tokens
         pattern = '|'.join(map(re.escape,self.special_tokens))
 
@@ -260,7 +271,6 @@ class LLMTokenizer:
         # encode the last chunk 
         if start < len(text): 
             self._encode_chunk(text[start:],tokens)
-
 
         return tokens
     
@@ -425,11 +435,11 @@ class LLMTokenizer:
 if __name__ == "__main__": 
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--vocab_size",type = int, required=True,help = "vocab_size of the vocabulary")
-    parser.add_argument("--special_tokens",nargs = '+',required = True, help = "list of special tokens in string form")
+    parser.add_argument("--vocab_size",type = int,default= 256,help = "vocab_size of the vocabulary")
+    parser.add_argument("--special_tokens",nargs = '+',default = None, help = "list of special tokens in string form")
     parser.add_argument("--file_path",type = str, required=True, help = "path of training text file")
     parser.add_argument("--verbose", action="store_true",help = "will print more information related to training process")
-    parser.add_argument("--config_name",type = str, required=True, help = "name of this specific tokenizer")
+    parser.add_argument("--config_name",type = str, default = "test", help = "name of this specific tokenizer")
     args, _ = parser.parse_known_args()
     
     # transform args to dict form
