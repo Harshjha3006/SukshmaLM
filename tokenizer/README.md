@@ -1,13 +1,5 @@
 A BPE tokenizer for tokenizing text data for consumption by LLMs. 
 
-## Features
-
-- Byte-level tokenization with merge operations
-- Support for custom special tokens
-- Trainable on only text data
-- Configurable vocabulary size
-- Human-readable merge visualization
-
 ## Installation
 
 ### 1. Clone the Repository
@@ -62,18 +54,19 @@ pytest -v tests/
 To train the tokenizer on your text data, use the following command:
 
 ```bash
-python tokenizer/tokenizer.py --vocab_size <VOCAB_SIZE> --special_tokens <TOKEN1> <TOKEN2> ... --file_path <TRAINING_FILE_PATH> [--verbose]
+python tokenizer/tokenizer.py --vocab_size <VOCAB_SIZE> --special_tokens <TOKEN1> <TOKEN2> ... --file_path <TRAINING_FILE_PATH> --config_name <CONFIG_NAME> [--verbose]
 ```
 
 Parameters:
-- `--vocab_size`: Total number of tokens in the vocabulary (must be ≥ 256 + number of special tokens)
-- `--special_tokens`: List of special tokens to be included in the vocabulary
-- `--file_path`: Path to the training text file
+- `--vocab_size`: Total number of tokens in the vocabulary (must be ≥ 256 + number of special tokens), default value = 256
+- `--special_tokens`: List of special tokens to be included in the vocabulary, default value = None 
+- `--file_path`(required): Path to the training text file
+- `--config_name`: Name of the tokenizer config, tokenizer-specific output files will be stored in the directory "tokenizer/{config_name}" and you can later load a specific tokenizer config as shown later in this readme, default value = "test"
 - `--verbose`: (Optional) Enable detailed training progress logs
 
 Example:
 ```bash
-python tokenizer/tokenizer.py --vocab_size 1000 --special_tokens "<|endoftext|>" "<|im_start|>" --file_path training_data.txt --verbose
+python tokenizer/tokenizer.py --vocab_size 1000 --special_tokens "<|endoftext|>" "<|im_start|>" --file_path training_data.txt --config_name "sample_config" --verbose
 ```
 
 ### Importing the Tokenizer
@@ -99,14 +92,10 @@ Here's a complete example of how to use the tokenizer in your Python code:
 from tokenizer.tokenizer import LLMTokenizer
 
 # Initialize the tokenizer
-tokenizer = LLMTokenizer(
-    vocab_size=1000,
-    special_tokens=["<|endoftext|>", "<|im_start|>"],
-    verbose=True
-)
+tokenizer = LLMTokenizer()
 
-# Train on your data
-tokenizer.train("training_data.txt")
+# Load your desired config
+tokenizer.load_config("my_config")
 
 # Encode text
 encoded = tokenizer.encode("Your text here")
@@ -126,21 +115,22 @@ print(f"Decoded text: {decoded}")
 2. Special tokens are added to the vocabulary
 3. During training, it:
    - Reads the input text file
-   - Chunks the text using special tokens
+   - Chunks the text using special tokens (if any special_tokens are specified)
    - Iteratively merges the most frequent token pairs until reaching the desired vocabulary size
 4. The trained tokenizer can then encode text into tokens and decode tokens back into text
 
 ## Output Files
 
-After training, the tokenizer generates the following files in the `tokenizer` directory:
+After training, the tokenizer generates the following files in the `tokenizer/{config_name}` directory:
 - `merges.pkl`: Binary file containing the merge operations
 - `tokenToByte.pkl`: Binary file mapping tokens to their byte representations
+- `config.json`: A JSON file containing tokenizer's properties like vocab_size, special_tokens, etc. 
 - `merges.json`: Human-readable version of merge operations
 - `tokenToByte.json`: Human-readable version of token-to-byte mappings
 
 ## Notes
 
 - The input text file must be UTF-8 encodable
-- Special tokens must be unique and non-overlapping
+- Special tokens must be unique, non-empty and non-overlapping
 - Vocabulary size must be at least 256 + number of special tokens
-- The tokenizer automatically creates a `tokenizer` directory to store its output files 
+- The tokenizer automatically creates a `tokenizer/{config_name}` directory to store its output files 
