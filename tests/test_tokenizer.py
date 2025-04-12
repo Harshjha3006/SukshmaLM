@@ -1,6 +1,7 @@
 import pytest
 from tokenizer.tokenizer import LLMTokenizer
 import re
+import os
 
 @pytest.fixture
 def sample_text(): 
@@ -8,7 +9,7 @@ def sample_text():
 
 @pytest.fixture
 def tokenizer(): 
-    return LLMTokenizer(vocab_size=300,special_tokens=["<|endoftext|>","<|im_start|>"])
+    return LLMTokenizer(vocab_size=270,special_tokens=["<|endoftext|>","<|im_start|>"])
 
 
 def test_init_validations():
@@ -27,6 +28,10 @@ def test_init_validations():
     with pytest.raises(TypeError) as excinfo: 
         LLMTokenizer(vocab_size=500, special_tokens=[30,"hello"])
     assert str(excinfo.value) == "each token in special_tokens must be a str"
+
+    with pytest.raises(TypeError) as excinfo: 
+        LLMTokenizer(vocab_size = 500, special_tokens=["endoftext"], config_name=3)
+    assert str(excinfo.value) == "config_name must be a str"
 
     # testing vocab_size value validation
     with pytest.raises(ValueError) as excinfo: 
@@ -177,3 +182,17 @@ def test_encode_decode(tokenizer,sample_text):
 
     encoded_tokens = tokenizer.encode(sample_text)
     assert tokenizer.decode(encoded_tokens) == sample_text
+
+def test_load_config(tokenizer): 
+    tokenizer.load_config("sample1")
+
+    assert tokenizer.vocab_size == 300
+    assert tokenizer.special_tokens == ["endoftext"]
+    assert tokenizer.storage_dir == os.path.join("tokenizer","sample1")
+
+
+    tokenizer.load_config("sample2")
+    
+    assert tokenizer.vocab_size == 500
+    assert tokenizer.special_tokens == ["endoftext"]
+    assert tokenizer.storage_dir == os.path.join("tokenizer","sample2")
