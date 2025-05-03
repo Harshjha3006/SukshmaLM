@@ -31,7 +31,6 @@ def get_config(**optional_kwargs):
     parser.add_argument("--training_data_path", type=str, required=True,help = "path to the training data")
     parser.add_argument("--batch_size",type = int, default = 512, help = "batch size for training")
     parser.add_argument("--context_len", type = int, default=1024, help = "context window size of the LLM")
-    parser.add_argument("--tokenizer_config", type = str, required= True,help = "Name of the specific tokenizer you want to use")
     parser.add_argument("--verbose", action="store_true", help = "Enables detailed training logs")
 
     # parsing the known args
