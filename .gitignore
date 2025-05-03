@@ -4,6 +4,7 @@ pseudocode.md
 *.json
 test.py
 */__pycache__/
+__pycache__/
 *.pkl
 .pytest_cache/
 TODO.txt

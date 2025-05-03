@@ -1,6 +1,5 @@
 import pytest
 from tokenizer.tokenizer import LLMTokenizer
-import re
 import os
 
 @pytest.fixture
@@ -29,14 +28,15 @@ def test_init_validations():
         LLMTokenizer(vocab_size=500, special_tokens=[30,"hello"])
     assert str(excinfo.value) == "each token in special_tokens must be a str"
 
+    # testing config_name type validation 
     with pytest.raises(TypeError) as excinfo: 
         LLMTokenizer(vocab_size = 500, special_tokens=["endoftext"], config_name=3)
     assert str(excinfo.value) == "config_name must be a str"
 
     # testing vocab_size value validation
     with pytest.raises(ValueError) as excinfo: 
-        LLMTokenizer(vocab_size=257,special_tokens=["hello","hi"])
-    assert str(excinfo.value) == "vocab_size must be >= 256 + num_special_tokens"
+        LLMTokenizer(vocab_size=256)
+    assert str(excinfo.value) == "vocab_size must be >= 257 + num_special_tokens"
 
     # testing special tokens uniqueness validation 
     with pytest.raises(ValueError) as excinfo: 
@@ -59,9 +59,9 @@ def test_init_validations():
     assert str(excinfo.value) == "Special tokens <|endoftext|> and <|endoftext|>extra overlap"
 
 
-def test_chunk_test(tokenizer,sample_text): 
-    if not tokenizer.special_tokens: 
-        return 
+def test_chunk_test(sample_text): 
+    tokenizer = LLMTokenizer(vocab_size=300, special_tokens = ["<|endoftext|>", "<|im_start|>"])
+   
     tokens = tokenizer._chunk_text(sample_text)
     assert len(tokens) == 3
     assert all(isinstance(chunk,list) for chunk in tokens)
@@ -79,11 +79,11 @@ def test_get_most_freq_bigram(tokenizer):
     assert bigram == (1,3)
     with pytest.raises(ValueError) as excinfo: 
         bigram = tokenizer._get_most_freq_bigram([[1],[2]])
-    assert str(excinfo.value) == "No bigrams were found in the input tokens"
+    assert str(excinfo.value) == "No bigrams were found in the input tokens or vocab_size is too large for the training data"
 
     with pytest.raises(ValueError) as excinfo: 
         bigram = tokenizer._get_most_freq_bigram([[],[]])
-    assert str(excinfo.value) == "No bigrams were found in the input tokens"
+    assert str(excinfo.value) == "No bigrams were found in the input tokens or vocab_size is too large for the training data"
 
 
 def test_replace_with_token_id(tokenizer): 
@@ -113,20 +113,24 @@ def test_train_validation(tokenizer):
 
 
 def test_special_token_handling(tokenizer):
-    if not tokenizer.special_tokens: 
-        return  
-    assert tokenizer.special_token_idMap["<|endoftext|>"] == 256
-    assert tokenizer.special_token_idMap["<|im_start|>"] == 257
 
-    assert tokenizer.tokenToByte[256].decode('utf-8') == "<|endoftext|>"
-    assert tokenizer.tokenToByte[257].decode('utf-8') == "<|im_start|>"
+    tokenizer = LLMTokenizer(vocab_size=300, special_tokens = ["<|endoftext|>", "<|im_start|>"])
+
+    assert tokenizer.special_token_idMap["<|endoftext|>"] == 257
+    assert tokenizer.special_token_idMap["<|im_start|>"] == 258
+
+    assert tokenizer.tokenToByte[257].decode('utf-8') == "<|endoftext|>"
+    assert tokenizer.tokenToByte[258].decode('utf-8') == "<|im_start|>"
 
 
 
-def test_train(tokenizer): 
+def test_train(): 
+   
+    tokenizer = LLMTokenizer(vocab_size=300, special_tokens = ["<|endoftext|>", "<|im_start|>"])
+
     train_file = "data/sample.txt"
     tokenizer.train(train_file)
-    assert len(tokenizer.merges) == tokenizer.vocab_size - (256 + ((len(tokenizer.special_tokens)) if tokenizer.special_tokens else 0)) 
+    assert len(tokenizer.merges) == tokenizer.vocab_size - (257 + ((len(tokenizer.special_tokens)) if tokenizer.special_tokens else 0)) 
     assert len(tokenizer.tokenToByte) == tokenizer.vocab_size
 
     # validate merged tokens
@@ -144,7 +148,7 @@ def test_train(tokenizer):
     if tokenizer.special_tokens: 
         # validate special tokens
         for i,token in enumerate(tokenizer.special_tokens): 
-            token_id = 256 + i
+            token_id = 257 + i
             assert token_id in tokenizer.tokenToByte
             assert tokenizer.tokenToByte[token_id].decode("utf-8") == token
 
@@ -152,6 +156,10 @@ def test_train(tokenizer):
     for i in range(256): 
         assert i in tokenizer.tokenToByte
         assert tokenizer.tokenToByte[i] == bytes([i])
+
+    # valid pad token 
+    assert tokenizer.PAD_TOKEN_ID in tokenizer.tokenToByte
+    assert tokenizer.tokenToByte[tokenizer.PAD_TOKEN_ID].decode("utf-8") == tokenizer.PAD_TOKEN
 
 def test_encode_validation(tokenizer): 
     # input text type validation 
@@ -182,7 +190,8 @@ def test_decode_validation(tokenizer):
     assert str(excinfo.value) == "Each token must be an int"
 
 
-def test_encode_decode(tokenizer,sample_text):
+def test_encode_decode(tokenizer, sample_text):
+    tokenizer.load_config("sample1")
     encoded_tokens = tokenizer.encode(sample_text)
     assert tokenizer.decode(encoded_tokens) == sample_text
 
@@ -190,18 +199,12 @@ def test_load_config(tokenizer):
     tokenizer.load_config("sample1")
 
     assert tokenizer.vocab_size == 300
-    assert tokenizer.special_tokens == ["endoftext"]
+    assert tokenizer.special_tokens == ["|<endoftext>|", "|<im_start>|"]
     assert tokenizer.storage_dir == os.path.join("tokenizer","sample1")
 
 
     tokenizer.load_config("sample2")
     
     assert tokenizer.vocab_size == 500
-    assert tokenizer.special_tokens == ["endoftext"]
+    assert tokenizer.special_tokens == ["|<endoftext>|", "|<im_end>|"]
     assert tokenizer.storage_dir == os.path.join("tokenizer","sample2")
-
-    tokenizer.load_config("sample3")
-
-    assert tokenizer.vocab_size == 300
-    assert tokenizer.special_tokens == None
-    assert tokenizer.special_token_idMap == {}

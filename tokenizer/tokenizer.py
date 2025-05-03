@@ -6,12 +6,13 @@ import pickle
 
 class LLMTokenizer: 
 
-    def __init__(self,vocab_size: int = 256, special_tokens: list[str] = None,config_name: str = "test", verbose: bool = False): 
+    def __init__(self,vocab_size: int = 257, special_tokens: list[str] = None,config_name: str = "test", verbose: bool = False): 
         """
         Initializes the tokenizer class 
         Token Arrangement ->  0 - 255                                           (single byte tokens)
-                              256 - (256 + num_special_tokens - 1)              (special tokens if provided)
-                              (256 + num_special_tokens) - (vocab_size - 1)     (merged tokens created during tokenization)
+                              256                                               (pad token)
+                              257 - (257 + num_special_tokens - 1)              (special tokens if provided)
+                              (257 + num_special_tokens) - (vocab_size - 1)     (merged tokens created during tokenization)
           
         Args: 
             vocab_size (int): The vocabulary size i.e. total number of tokens of the tokenizer 
@@ -35,10 +36,10 @@ class LLMTokenizer:
     
 
         # Value validations
-        # if vocab_size = 256 + len(special_tokens) then no merges will be performed and it will be equivalent
-        # to a single byte level tokenizer with special tokens 
-        if vocab_size < 256 + (len(special_tokens) if special_tokens else 0):
-            raise ValueError("vocab_size must be >= 256 + num_special_tokens")
+        # if vocab_size = 257 + len(special_tokens) then no merges will be performed and it will be equivalent
+        # to a single byte level tokenizer with special tokens and a padding token 
+        if vocab_size < 257 + (len(special_tokens) if special_tokens else 0):
+            raise ValueError("vocab_size must be >= 257 + num_special_tokens")
         if special_tokens and len(special_tokens) != len(set(special_tokens)):
             raise ValueError("all special tokens must be unique")
         if special_tokens and any(not token for token in special_tokens):
@@ -59,6 +60,9 @@ class LLMTokenizer:
         self.special_tokens = special_tokens
         self.config_name = config_name
         self.verbose = verbose
+        # defining pad token and its token id
+        self.PAD_TOKEN_ID = 256
+        self.PAD_TOKEN = "<|pad|>"
 
         # path of directory where output files of the tokenizer would be stored
         self.storage_dir = os.path.join("tokenizer", self.config_name)
@@ -74,6 +78,8 @@ class LLMTokenizer:
 
         # compute the byte representation of all single byte tokens 
         self.tokenToByte = {i : bytes([i]) for i in range(256)}
+        # defining byte representation of pad token 
+        self.tokenToByte[self.PAD_TOKEN_ID] = self.PAD_TOKEN.encode('utf-8')
         self.tokenToByte_store_path = os.path.join(self.storage_dir,"tokenToByte.pkl")
         self.pretty_tokenToByte_store_path = os.path.join(self.storage_dir,"tokenToByte.json")
 
@@ -81,7 +87,7 @@ class LLMTokenizer:
         self.special_token_idMap = {}
         if special_tokens: 
             for i,token in enumerate(self.special_tokens):
-                self.special_token_idMap[token] = 256 + i
+                self.special_token_idMap[token] = 257 + i
                 self.tokenToByte[self.special_token_idMap[token]] = token.encode('utf-8') 
 
     def train(self, input_file_path: str): 
@@ -116,7 +122,7 @@ class LLMTokenizer:
             tokens = [list(text.encode('utf-8'))]
 
         # set the curr_vocab_size
-        curr_vocab_size = 256 + (len(self.special_tokens) if (self.special_tokens) else 0)
+        curr_vocab_size = 257 + (len(self.special_tokens) if (self.special_tokens) else 0)
 
         print("Starting to Merge tokens ...")
         # iterate till the required vocab_size has been achieved 
@@ -159,7 +165,9 @@ class LLMTokenizer:
         config = {
             "vocab_size": self.vocab_size, 
             "special_tokens": self.special_tokens, 
-            "special_token_idMap" : self.special_token_idMap
+            "special_token_idMap" : self.special_token_idMap,
+            "pad_token" : self.PAD_TOKEN, 
+            "pad_token_id" : self.PAD_TOKEN_ID 
         }
 
         with open(self.config_file_path, 'w') as f: 
@@ -214,6 +222,8 @@ class LLMTokenizer:
         self.vocab_size = config["vocab_size"]
         self.special_tokens = config["special_tokens"]
         self.special_token_idMap = config["special_token_idMap"]
+        self.PAD_TOKEN = config["pad_token"]
+        self.PAD_TOKEN_ID = config["pad_token_id"]
 
         with open(self.merges_store_path,'rb') as f: 
             self.merges = pickle.load(f)
@@ -388,7 +398,7 @@ class LLMTokenizer:
         Returns: 
             the most frequent token bigram
         Raises: 
-            ValueError: if no bigrams are found in the input tokens
+            ValueError: if no bigrams are found in the input tokens (this may happen if vocab_size is too large for the training data)
         """
 
         freq_map = {}
@@ -399,7 +409,7 @@ class LLMTokenizer:
 
         # raise error if no bigram was found
         if not freq_map: 
-            raise ValueError("No bigrams were found in the input tokens")
+            raise ValueError("No bigrams were found in the input tokens or vocab_size is too large for the training data")
 
         return max(freq_map,key = freq_map.get)
     
@@ -435,7 +445,7 @@ class LLMTokenizer:
 if __name__ == "__main__": 
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--vocab_size",type = int,default= 256,help = "vocab_size of the vocabulary")
+    parser.add_argument("--vocab_size",type = int,default= 257,help = "vocab_size of the vocabulary")
     parser.add_argument("--special_tokens",nargs = '+',default = None, help = "list of special tokens in string form")
     parser.add_argument("--file_path",type = str, required=True, help = "path of training text file")
     parser.add_argument("--verbose", action="store_true",help = "will print more information related to training process")
