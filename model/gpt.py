@@ -1,18 +1,28 @@
 import torch 
 import torch.nn as nn
 import torch.nn.functional as F
+from config import LLMTrainerConfig
 
 class MaskedSelfAttention(nn.Module): 
     
-    def __init__(self,embed_dim,num_heads,dropout_rate,context_len): 
+    def __init__(self, embed_dim: int, num_heads: int, context_len: int, dropout_rate: float): 
         """
-        Initializes a Multi Head Masked Self Attention Block 
+        Initializes a Multi Head Masked Self Attention Block
+
+        Args: 
+            embed_dim (int): embedding dimension of the input 
+            num_heads (int): number of attention heads 
+            context_len (int): size of LLM's context window 
+            dropout_rate (int): dropout rate for the dropout layer 
         """
 
+        # Initializing parent class 
         super().__init__()
+
         self.embed_dim = embed_dim
         self.num_heads = num_heads
 
+        # computing embed_dim for each head i.e. head_dim
         self.head_dim = embed_dim // num_heads
 
         # query, key and value matrices 
@@ -20,24 +30,28 @@ class MaskedSelfAttention(nn.Module):
         self.query = nn.Linear(embed_dim, embed_dim)
         self.value = nn.Linear(embed_dim, embed_dim)
 
-        # Attention mask to prevent tokens from interacting with future tokens
+        # Attention mask of shape (context_len, context_len) to prevent tokens from interacting with future tokens
         self.register_buffer("tril", torch.tril(torch.ones(context_len,context_len)))
 
         # Dropout layer for regularization 
         self.dropout = nn.Dropout(dropout_rate)
 
-        # Projection layer for projecting into the residual pathway 
+        # Projection layer for projecting the results into the residual pathway 
         self.proj = nn.Linear(embed_dim, embed_dim)
 
 
-    def forward(self, x): 
-        
+    def forward(self, x: torch.Tensor) -> torch.Tensor: 
+            
+        # Unpacking dimensions of input tensor 
         Batch, Context_len, Embed_dim = x.shape 
 
         # Computing the key, query and value vectors for each token embedding 
-
+        
+        # keys give info related "what a token offers"
         k = self.key(x) # (Batch, Context_len, Embed_dim)
+        # queries give info related to "what a token is looking for"
         q = self.query(x) # (Batch, Context_len, Embed_dim)
+        # values give related to "what a token will actually communicate with the other token" 
         v = self.value(x) # (Batch, Context_len, Embed_dim)
 
         # Reshape the vectors so that multiple heads are created 
@@ -46,26 +60,26 @@ class MaskedSelfAttention(nn.Module):
         v = torch.permute(v.view(Batch, Context_len, self.num_heads, self.head_dim),(0,2,1,3)) # (Batch, Num_heads, Context_len, Head_dim)
 
         # Compute scaled attention matrices for each head 
-        # Attention Matrices -> (Batch, Num_heads, Context_len, Context_len)    
-        attention = torch.matmul(q, k.transpose(-1,-2)) / (Embed_dim ** 0.5)
+        # Compute affinity between tokens 
+        attention = torch.matmul(q, k.transpose(-1,-2)) / (Embed_dim ** 0.5) # (Batch, Num_heads, Context_len, Context_len)
 
-        # Mask the attention matrix so that tokens don't attend to their future tokens 
-        attention = torch.masked_fill(attention, self.tril[:Context_len, :Context_len] == 0, float('-inf'))
+        # Mask the attention matrix so that tokens don't attend to future tokens 
+        attention = torch.masked_fill(attention, self.tril[:Context_len, :Context_len] == 0, float('-inf')) # (Batch, Num_heads, Context_len, Context_len)
 
         # compute softmax for normalization 
-        attention = F.softmax(attention, dim = -1)
+        attention = F.softmax(attention, dim = -1) # (Batch, Num_heads, Context_len, Context_len)
 
         # add dropout layer for regularization
         # will randomly shut off communications between some tokens 
         attention = self.dropout(attention)
 
         # Compute output by doing matrix product of attention with value vectors 
-        # (Batch, Num_heads, Context_len, Context_len) with (Batch, Num_heads, Context_len, Head_dim) = (Batch, Num_heads, Context_len, Head_dim)
-        output = torch.matmul(attention, v)
+        # output will contain token embeddings which have incorporated information from other tokens in the context window
+        output = torch.matmul(attention, v) # (Batch, Num_heads, Context_len, Head_dim)
 
-        # reshape and permute the output 
-        output = torch.permute(output, (0,2,1,3))
-        output = output.reshape(Batch, Context_len, Embed_dim)
+        # reshape and permute the output so that all heads get concatenated for each token
+        output = torch.permute(output, (0,2,1,3)) # (Batch, Context_len, Num_heads, Head_dim)
+        output = output.reshape(Batch, Context_len, Embed_dim) # (Batch, Context_len, Embed_dim)
 
         # project the output to the residual pathway 
         output = self.proj(output) # (Batch, Context_len, Embed_dim)
@@ -75,11 +89,15 @@ class MaskedSelfAttention(nn.Module):
 
 
 class FeedForward(nn.Module): 
-    def __init__(self,embed_dim,dropout_rate): 
+    def __init__(self, embed_dim: int, dropout_rate: float): 
         """
         Initializes a Feed forward layer 
+        Args: 
+            embed_dim (int): embedding dimension of the input vector 
+            dropout_rate (float): dropout rate for the dropout layer 
         """
 
+        # Initializing the parent class 
         super().__init__()
 
         self.fflayer = nn.Sequential(
@@ -90,24 +108,31 @@ class FeedForward(nn.Module):
         )   
 
 
-    def forward(self, x): 
+    def forward(self, x: torch.Tensor) -> torch.Tensor: 
 
         return self.fflayer(x)
 
 
 
 class TransformerBlock(nn.Module): 
-    def __init__(self,embed_dim, num_heads, context_len, dropout_rate):
+    def __init__(self, embed_dim: int, num_heads: int, context_len: int, dropout_rate: float):
         """
         Initializes a single Transformer Block 
         2 Main components -> - MaskedSelfAttention 
                           -> - FeedForwardLayer 
+
+        Args: 
+            embed_dim (int): embedding dimension of input vectors 
+            num_heads (int): number of multi head attention units 
+            context_len (int): size of the context window of the LLM 
+            dropout_rate (float): dropout rate for the dropout layer 
         """
 
+        # Initializing parent class 
         super().__init__()
 
-        # masked attention layer
-        self.attention = MaskedSelfAttention(embed_dim, num_heads, dropout_rate, context_len)
+        # masked self attention block 
+        self.attention = MaskedSelfAttention(embed_dim, num_heads, context_len, dropout_rate)
 
         # feed forward layer 
         self.ffd = FeedForward(embed_dim, dropout_rate)
@@ -116,7 +141,7 @@ class TransformerBlock(nn.Module):
         self.ln1 = nn.LayerNorm(embed_dim)
         self.ln2 = nn.LayerNorm(embed_dim)
 
-    def forward(self, x): 
+    def forward(self, x: torch.Tensor) -> torch.Tensor: 
 
         x = x + self.attention(self.ln1(x))
 
@@ -130,12 +155,14 @@ class TransformerBlock(nn.Module):
 # a GPT style decoder only transformer
 class GPT(nn.Module): 
 
-    def __init__(self,config): 
+    def __init__(self, config: LLMTrainerConfig): 
         """
         Initializes all the layers and hyperparameters 
         """
 
+        # initializing the parent class  
         super().__init__()
+
         self.embed_dim = config.embed_dim
         self.vocab_size = config.vocab_size
         self.context_len = config.context_len  
@@ -145,48 +172,44 @@ class GPT(nn.Module):
 
 
         # Initial Embedding Layer
-        # (Batch, context_len, vocab_size) -> (Batch, context_len, embed_dim)
+        # (Batch, context_len) -> (Batch, context_len, embed_dim)
         self.embedding = nn.Embedding(self.vocab_size, self.embed_dim)
 
         # Positional Encoding layer 
         # an embedding for every relative position in the context window 
         self.positional_encoding = nn.Embedding(self.context_len, self.embed_dim)
-
+        self.register_buffer("pos_tensor", torch.arange(self.context_len))
 
         # Multiple Transformer Blocks 
         # (Batch, context_len, embed_dim) -> (Batch, context_len, embed_dim)
-        self.blocks = nn.Sequential(*[TransformerBlock(self.embed_dim, self.num_heads,self.context_len,self.dropout_rate)
+        self.blocks = nn.Sequential(*[TransformerBlock(self.embed_dim, self.num_heads, self.context_len, self.dropout_rate)
                                       for _ in range(self.num_layers)])
 
         # Reverse Embedding 
         # (Batch, context_len, embed_dim) -> (Batch, context_len, vocab_size)
-        # Logits are generated for every token which will then used to compute cross entropy loss
+        # Logits are generated for every token which will then be used to compute cross entropy loss
         self.reverse_embedding = nn.Linear(self.embed_dim, self.vocab_size)
-        # Weight sharing with initial embedding layer
+        # Weight sharing with the initial embedding layer
         self.reverse_embedding.weight = self.embedding.weight
 
     
 
-
-
-    def forward(self, x): 
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  
 
         # x of shape (Batch, Context_len)
         Batch, Context_len = x.shape
 
-        # Convert tokens to their embeddings -> (Batch, Context_len, Embed_dim)
-        x = self.embedding(x)
+        # Convert tokens to their embeddings 
+        x = self.embedding(x) # (Batch, Context_len, Embed_dim)
 
         # Add Positional Encodings to the Embeddings 
-        x = x + self.positional_encoding(torch.arange(0,Context_len))
+        x = x + self.positional_encoding(self.pos_tensor) # (Batch, Context_len, Embed_dim)
 
         # Feed the input vectors x through the Transformer Blocks 
-        # output shape after all layers -> (Batch, Context_len, Embed_dim)
-        x = self.blocks(x)
+        x = self.blocks(x) # (Batch, Context_len, Embed_dim)
 
-        # Compute logits over the vocab 
-        # logits -> (Batch, Context_len, vocab_size)
-        logits = self.reverse_embedding(x)
+        # Compute logits over the vocabulary
+        logits = self.reverse_embedding(x) # (Batch, Context_len, vocab_size)
 
         # return logits for computing loss 
         return logits 
