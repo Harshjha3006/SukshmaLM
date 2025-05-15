@@ -122,7 +122,7 @@ class LLMTrainer:
                 best_loss = avg_loss
                 best_epoch = epoch + 1
                 best_config = {
-                    "model" : self.model.state_dict(), 
+                    "model_state_dict" : self.model.state_dict(), 
                     "optimizer" : self.optimizer.state_dict(),
                     "epoch" : epoch + 1, 
                     "config": self.config

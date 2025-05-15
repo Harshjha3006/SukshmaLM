@@ -196,7 +196,34 @@ class GPT(nn.Module):
         # Weight sharing with the initial embedding layer
         self.reverse_embedding.weight = self.embedding.weight
 
-    
+    @classmethod
+    def from_checkpoint(cls, checkpoint_path: str, device: str):
+        """
+        Initialize a GPT model from a checkpoint file.
+        
+        Args:
+            checkpoint_path (str): Path to the checkpoint file (.pth)
+            device (str): Device to load the model on ('cuda:0' or 'cpu')
+            
+        Returns:
+            model (GPT): Initialized model with loaded weights
+        """
+        # Load the checkpoint
+        checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
+        
+        # Get the config from checkpoint
+        config = checkpoint['config']
+        
+        # Create a new model instance
+        model = cls(config)
+        
+        # Load the model state dict
+        model.load_state_dict(checkpoint['model_state_dict'])
+        
+        # Move model to specified device
+        model = model.to(device)
+        
+        return model
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:  
 
