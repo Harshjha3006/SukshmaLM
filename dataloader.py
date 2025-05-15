@@ -8,7 +8,7 @@ import pickle
 class LLMDataset(Dataset):
     def __init__(self, data_path: str,context_length: int): 
         """
-        Initializes the LLMDataset 
+        Dataset class for an LLM
         Args: 
             data_path (str): path to the tokenized dataset 
             context_length (int): Maximum number of tokens an LLM can process simultaneously, i.e. its context window 

@@ -8,7 +8,7 @@ class LLMTrainerConfig:
 
     def __init__(self, **kwargs): 
         """
-        Initializing various properties related to LLM Training 
+        Config class for training an LLM  
         """
 
         # setting the device type, 'cuda:0' or 'cpu'

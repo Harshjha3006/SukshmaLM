@@ -8,7 +8,7 @@ class LLMTokenizer:
 
     def __init__(self,vocab_size: int = 257, special_tokens: list[str] = None,config_name: str = "test", verbose: bool = False): 
         """
-        Initializes the tokenizer class 
+        A Byte Pair Encoding Tokenizer for an LLM  
         Token Arrangement ->  0 - 255                                           (single byte tokens)
                               256                                               (pad token)
                               257 - (257 + num_special_tokens - 1)              (special tokens if provided)

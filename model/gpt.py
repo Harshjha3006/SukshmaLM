@@ -161,7 +161,7 @@ class GPT(nn.Module):
 
     def __init__(self, config: LLMTrainerConfig): 
         """
-        Initializes all the layers and hyperparameters 
+        A Decoder-only Transformer model based on the GPT-2 Architecture  
         """
 
         # initializing the parent class  
