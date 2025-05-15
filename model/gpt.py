@@ -1,7 +1,7 @@
 import torch 
 import torch.nn as nn
 import torch.nn.functional as F
-from config import LLMTrainerConfig
+from trainer_config import LLMTrainerConfig
 
 class MaskedSelfAttention(nn.Module): 
     
@@ -115,7 +115,7 @@ class FeedForward(nn.Module):
 
 
 class TransformerBlock(nn.Module): 
-    def __init__(self, embed_dim: int, num_heads: int, context_len: int, dropout_rate: float):
+    def __init__(self, embed_dim: int, num_heads: int, context_len: int, dropout_rate: float, num_layers: int):
         """
         Initializes a single Transformer Block 
         2 Main components -> - MaskedSelfAttention 
@@ -126,6 +126,7 @@ class TransformerBlock(nn.Module):
             num_heads (int): number of multi head attention units 
             context_len (int): size of the context window of the LLM 
             dropout_rate (float): dropout rate for the dropout layer 
+            num_layers (int): number of transformer blocks 
         """
 
         # Initializing parent class 
@@ -141,11 +142,14 @@ class TransformerBlock(nn.Module):
         self.ln1 = nn.LayerNorm(embed_dim)
         self.ln2 = nn.LayerNorm(embed_dim)
 
+        # residual scaling factor 
+        self.res_scaling_factor = 1 / (num_layers ** 0.5)
+
     def forward(self, x: torch.Tensor) -> torch.Tensor: 
 
-        x = x + self.attention(self.ln1(x))
+        x = x + self.res_scaling_factor * self.attention(self.ln1(x))
 
-        x = x + self.ffd(self.ln2(x))
+        x = x + self.res_scaling_factor * self.ffd(self.ln2(x))
 
         return x
 
@@ -182,7 +186,7 @@ class GPT(nn.Module):
 
         # Multiple Transformer Blocks 
         # (Batch, context_len, embed_dim) -> (Batch, context_len, embed_dim)
-        self.blocks = nn.Sequential(*[TransformerBlock(self.embed_dim, self.num_heads, self.context_len, self.dropout_rate)
+        self.blocks = nn.Sequential(*[TransformerBlock(self.embed_dim, self.num_heads, self.context_len, self.dropout_rate, self.num_layers)
                                       for _ in range(self.num_layers)])
 
         # Reverse Embedding 

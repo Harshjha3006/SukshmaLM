@@ -9,3 +9,5 @@ __pycache__/
 .pytest_cache/
 TODO.txt
 blogs/*
+checkpoints/
+tensorboard_logs/

@@ -49,7 +49,7 @@ class LLMDataset(Dataset):
         # Get the input sequence
         x = torch.tensor(self.data[start_idx:end_idx - 1])
 
-        y = torch.tensor(self.data[start_idx + 1:end_idx])
+        y = torch.tensor(self.data[start_idx + 1:end_idx], dtype = torch.long)
         
         return x, y
 

@@ -35,7 +35,12 @@ def get_config(**optional_kwargs):
     parser.add_argument("--vocab_size", type = int, required=True, help = "vocab_size of the tokenizer")
     parser.add_argument("--num_layers", type = int, default=6, help = "Number of Decoder blocks")
     parser.add_argument("--num_heads", type = int, required=4, help = "Number of attention heads")
-    parser.add_argument("--dropout_rate", type = float, default=0.2)
+    parser.add_argument("--dropout_rate", type = float, default=0.1)
+    parser.add_argument("--num_epochs", type = int, default = 5, help = "Number of Epochs required for training")
+    parser.add_argument("--lr", type = float, default = 1e-3, help = "learning rate of the optimizer")
+    parser.add_argument("--l2reg", type = float, default=1e-3, help = "l2 regularization rate of the optimizer")
+    parser.add_argument("--exp_name", type = str, default = "test", help = "Name of the training run")
+    parser.add_argument("--seed", type = int, default = 248, help = "Seed value for better reproducibility")
     parser.add_argument("--verbose", action="store_true", help = "Enables detailed training logs")
 
     # parsing the known args

@@ -1,0 +1,122 @@
+from trainer_config import LLMTrainerConfig, get_config
+import torch 
+import torch.nn as nn
+from model.gpt import GPT
+from dataloader import get_dataloader
+import random 
+import numpy as np 
+import os
+from torch.utils.tensorboard.writer import SummaryWriter
+
+checkpoints_path = "checkpoints"
+logs_path = "tensorboard_logs"
+
+class LLMTrainer: 
+
+    def __init__(self, config: LLMTrainerConfig): 
+        """
+        Initializes the hyperparameters required for training an LLM
+        """
+
+        # Creating required directories 
+        os.makedirs(checkpoints_path, exist_ok=True)
+        os.makedirs(logs_path, exist_ok=True)
+
+        self.num_epochs = config.num_epochs
+        self.lr = config.lr
+        self.l2reg = config.l2reg
+        self.exp_name = config.exp_name
+        self.device = config.device 
+        self.dataloader = get_dataloader(config)
+
+        self.model = GPT(config).to(self.device)
+        self.model.apply(self.init_weights)
+        self.optimzier = torch.optim.AdamW(self.model.parameters(), lr = self.lr, weight_decay= self.l2reg)
+        self.logger = SummaryWriter(log_dir=f"{logs_path}/{self.exp_name}")
+
+        self.config = config
+
+        # Setting the seed for better reproducibility 
+        random.seed(config.seed)
+        np.random.seed(config.seed)
+        torch.manual_seed(config.seed)
+        torch.cuda.manual_seed_all(config.seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+
+
+        # Defining the loss function 
+        self.criterion = nn.CrossEntropyLoss()
+
+
+    def init_weights(self, module):
+        if isinstance(module, (nn.Linear, nn.Embedding)): 
+            nn.init.normal_(module.weight,mean = 0.0, std = 0.02)
+        if isinstance(module, nn.Linear) and module.bias is not None: 
+            nn.init.zeros_(module.bias)
+    
+
+    def train(self): 
+
+        """
+        Trains the LLM with the given hyperparameters 
+        """
+
+        best_epoch = 0
+        best_loss = 1e9
+        best_config = None 
+
+        self.model.train()
+
+
+        for epoch in range(self.num_epochs): 
+
+            loss_history = []
+
+            for x, y in self.dataloader: 
+
+                x = x.to(self.device) # (Batch, Context_len)
+                y = y.to(self.device) # (Batch, Context_len)
+
+                self.optimzier.zero_grad()
+
+                logits = self.model(x) # (Batch, Context_len, vocab_size)
+
+                loss = self.criterion(logits.view(-1, logits.shape[-1]), y.view(-1))
+
+                loss.backward()
+                self.optimzier.step()
+
+                loss_history.append(loss.item())
+
+
+            avg_loss = np.mean(loss_history)
+            if avg_loss < best_loss: 
+                best_loss = avg_loss
+                best_epoch = epoch + 1
+                best_config = {
+                    "model" : self.model.state_dict(), 
+                    "optimzier" : self.optimzier.state_dict(),
+                    "epoch" : epoch + 1, 
+                    "config": self.config
+                }
+
+            print(f"Epoch {epoch + 1}: Loss: {avg_loss}")
+            self.logger.add_scalar("Loss", avg_loss, epoch + 1)
+
+
+        self.logger.close()
+        torch.save(best_config, f"{checkpoints_path}/{self.exp_name}.pth")
+
+        print(f"Best Epoch: {best_epoch}")
+        print(f"Best Loss: {best_loss}")
+
+
+
+
+if __name__ == "__main__": 
+
+    config = get_config()
+    trainer = LLMTrainer(config)
+    trainer.train()
+                
