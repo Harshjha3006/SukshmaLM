@@ -15,7 +15,7 @@ def test_init_validations():
 
     # testing vocab_size type validation
     with pytest.raises(TypeError) as excinfo: 
-        LLMTokenizer(vocab_size="vocab",special_tokens=["endoftext"])
+        LLMTokenizer(vocab_size="vocab",special_tokens=["im_start"])
     assert str(excinfo.value) == "vocab_size must be an integer"
 
     # testing special_tokens list validation
@@ -30,17 +30,17 @@ def test_init_validations():
 
     # testing config_name type validation 
     with pytest.raises(TypeError) as excinfo: 
-        LLMTokenizer(vocab_size = 500, special_tokens=["endoftext"], config_name=3)
+        LLMTokenizer(vocab_size = 500, special_tokens=["im_start"], config_name=3)
     assert str(excinfo.value) == "config_name must be a str"
 
     # testing vocab_size value validation
     with pytest.raises(ValueError) as excinfo: 
         LLMTokenizer(vocab_size=256)
-    assert str(excinfo.value) == "vocab_size must be >= 257 + num_special_tokens"
+    assert str(excinfo.value) == "vocab_size must be >= 259 + num_special_tokens"
 
     # testing special tokens uniqueness validation 
     with pytest.raises(ValueError) as excinfo: 
-        LLMTokenizer(vocab_size=300, special_tokens=["<|endoftext|>","<|endoftext|>"])
+        LLMTokenizer(vocab_size=300, special_tokens=["<|im_start|>","<|im_start|>"])
     assert str(excinfo.value) == "all special tokens must be unique"
 
     # testing special tokens non emptiness validation
@@ -55,12 +55,12 @@ def test_init_validations():
 
     # testing special tokens overlap validation 
     with pytest.raises(ValueError) as excinfo:
-        LLMTokenizer(vocab_size=500,special_tokens=["<|endoftext|>", "<|endoftext|>extra"])
-    assert str(excinfo.value) == "Special tokens <|endoftext|> and <|endoftext|>extra overlap"
+        LLMTokenizer(vocab_size=500,special_tokens=["<|im_start|>", "<|im_start|>extra"])
+    assert str(excinfo.value) == "Special tokens <|im_start|> and <|im_start|>extra overlap"
 
 
 def test_chunk_test(sample_text): 
-    tokenizer = LLMTokenizer(vocab_size=300, special_tokens = ["<|endoftext|>", "<|im_start|>"])
+    tokenizer = LLMTokenizer(vocab_size=300, special_tokens = ["<|im_start|>"])
    
     tokens = tokenizer._chunk_text(sample_text)
     assert len(tokens) == 3
@@ -114,23 +114,26 @@ def test_train_validation(tokenizer):
 
 def test_special_token_handling(tokenizer):
 
-    tokenizer = LLMTokenizer(vocab_size=300, special_tokens = ["<|endoftext|>", "<|im_start|>"])
+    tokenizer = LLMTokenizer(vocab_size=300, special_tokens = ["<|im_start|>"])
 
-    assert tokenizer.special_token_idMap["<|endoftext|>"] == 257
-    assert tokenizer.special_token_idMap["<|im_start|>"] == 258
+    assert tokenizer.special_token_idMap["<|im_start|>"] == 259
+    assert tokenizer.eos_token_id == 258
+    assert tokenizer.bos_token_id == 257
+    assert len(tokenizer.special_tokens) == 3
 
-    assert tokenizer.tokenToByte[257].decode('utf-8') == "<|endoftext|>"
-    assert tokenizer.tokenToByte[258].decode('utf-8') == "<|im_start|>"
+    assert tokenizer.tokenToByte[tokenizer.eos_token_id].decode('utf-8') == "<|endoftext|>"
+    assert tokenizer.tokenToByte[tokenizer.bos_token_id].decode('utf-8') == "<|bos|>"
+    assert tokenizer.tokenToByte[259].decode('utf-8') == "<|im_start|>"
 
 
 
 def test_train(): 
    
-    tokenizer = LLMTokenizer(vocab_size=300, special_tokens = ["<|endoftext|>", "<|im_start|>"])
+    tokenizer = LLMTokenizer(vocab_size=300, special_tokens = ["<|im_start|>"])
 
     train_file = "data/sample.txt"
     tokenizer.train(train_file)
-    assert len(tokenizer.merges) == tokenizer.vocab_size - (257 + ((len(tokenizer.special_tokens)) if tokenizer.special_tokens else 0)) 
+    assert len(tokenizer.merges) == tokenizer.vocab_size - (257 + len(tokenizer.special_tokens)) 
     assert len(tokenizer.tokenToByte) == tokenizer.vocab_size
 
     # validate merged tokens
@@ -145,21 +148,24 @@ def test_train():
 
         assert byte_rep == expected_byte_rep
 
-    if tokenizer.special_tokens: 
-        # validate special tokens
-        for i,token in enumerate(tokenizer.special_tokens): 
-            token_id = 257 + i
-            assert token_id in tokenizer.tokenToByte
-            assert tokenizer.tokenToByte[token_id].decode("utf-8") == token
+    # validate special tokens
+    for i,token in enumerate(tokenizer.special_tokens): 
+        token_id = 257 + i
+        assert token_id in tokenizer.tokenToByte
+        assert tokenizer.tokenToByte[token_id].decode("utf-8") == token
 
     # valid single byte tokens
     for i in range(256): 
         assert i in tokenizer.tokenToByte
         assert tokenizer.tokenToByte[i] == bytes([i])
 
-    # valid pad token 
+    # valid pad, eos and bos token 
     assert tokenizer.PAD_TOKEN_ID in tokenizer.tokenToByte
     assert tokenizer.tokenToByte[tokenizer.PAD_TOKEN_ID].decode("utf-8") == tokenizer.PAD_TOKEN
+    assert tokenizer.eos_token_id in tokenizer.tokenToByte
+    assert tokenizer.tokenToByte[tokenizer.eos_token_id].decode("utf-8") == tokenizer.eos_token
+    assert tokenizer.bos_token_id in tokenizer.tokenToByte
+    assert tokenizer.tokenToByte[tokenizer.bos_token_id].decode("utf-8") == tokenizer.bos_token
 
 def test_encode_validation(tokenizer): 
     # input text type validation 
@@ -199,12 +205,12 @@ def test_load_config(tokenizer):
     tokenizer.load_config("sample1")
 
     assert tokenizer.vocab_size == 300
-    assert tokenizer.special_tokens == ["|<endoftext>|", "|<im_start>|"]
+    assert tokenizer.special_tokens == ["<|bos|>", "<|endoftext|>", "|<im_start>|"]
     assert tokenizer.storage_dir == os.path.join("tokenizer","sample1")
 
 
     tokenizer.load_config("sample2")
     
     assert tokenizer.vocab_size == 500
-    assert tokenizer.special_tokens == ["|<endoftext>|", "|<im_end>|"]
+    assert tokenizer.special_tokens == ["<|bos|>", "<|endoftext|>", "|<im_end>|"]
     assert tokenizer.storage_dir == os.path.join("tokenizer","sample2")

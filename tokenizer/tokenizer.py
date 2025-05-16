@@ -6,18 +6,23 @@ import pickle
 
 class LLMTokenizer: 
 
-    def __init__(self,vocab_size: int = 257, special_tokens: list[str] = None,config_name: str = "test", verbose: bool = False): 
+    def __init__(self,vocab_size: int = 259, special_tokens: list[str] = None,config_name: str = "test", 
+                 eos_token: str = "<|endoftext|>", verbose: bool = False): 
         """
         A Byte Pair Encoding Tokenizer for an LLM  
         Token Arrangement ->  0 - 255                                           (single byte tokens)
                               256                                               (pad token)
-                              257 - (257 + num_special_tokens - 1)              (special tokens if provided)
-                              (257 + num_special_tokens) - (vocab_size - 1)     (merged tokens created during tokenization)
+                              257                                               (beginning of sequence token (bos))
+                              258                                               (end of text token (eos))
+                              259 - (259 + num_special_tokens - 1)              (special tokens if provided)
+                              (259 + num_special_tokens) - (vocab_size - 1)     (merged tokens created during tokenization)
           
         Args: 
             vocab_size (int): The vocabulary size i.e. total number of tokens of the tokenizer 
-            special_tokens (list[str]): list of special_tokens in string form , eg -> ["<|endoftext|>", "<|im_start|>"]
+            special_tokens (list[str]): list of special_tokens other than bos and eos token 
+              in string form , eg -> ["<|im_start|>", "<|im_end|>"]
             config_name (str): name of the saved config for this specific trained tokenizer
+            eos_token (str): string representation of the end of sequence token 
             verbose (bool): Used to enable detailed training logs 
         Raises: 
             ValueError: if vocab_size is too small or special tokens are invalid or they overlap 
@@ -36,10 +41,10 @@ class LLMTokenizer:
     
 
         # Value validations
-        # if vocab_size = 257 + len(special_tokens) then no merges will be performed and it will be equivalent
-        # to a single byte level tokenizer with special tokens and a padding token 
-        if vocab_size < 257 + (len(special_tokens) if special_tokens else 0):
-            raise ValueError("vocab_size must be >= 257 + num_special_tokens")
+        # if vocab_size = 259 + len(special_tokens) then no merges will be performed and it will be equivalent
+        # to a single byte level tokenizer with special tokens, padding token, eos and bos token
+        if vocab_size < 259 + (len(special_tokens) if special_tokens else 0):
+            raise ValueError("vocab_size must be >= 259 + num_special_tokens")
         if special_tokens and len(special_tokens) != len(set(special_tokens)):
             raise ValueError("all special tokens must be unique")
         if special_tokens and any(not token for token in special_tokens):
@@ -61,8 +66,12 @@ class LLMTokenizer:
         self.config_name = config_name
         self.verbose = verbose
         # defining pad token and its token id
-        self.PAD_TOKEN_ID = 256
         self.PAD_TOKEN = "<|pad|>"
+        self.PAD_TOKEN_ID = 256
+        self.bos_token = "<|bos|>"
+        self.bos_token_id = 257 
+        self.eos_token = eos_token
+        self.eos_token_id = 258 
 
         # path of directory where output files of the tokenizer would be stored
         self.storage_dir = os.path.join("tokenizer", self.config_name)
@@ -83,12 +92,14 @@ class LLMTokenizer:
         self.tokenToByte_store_path = os.path.join(self.storage_dir,"tokenToByte.pkl")
         self.pretty_tokenToByte_store_path = os.path.join(self.storage_dir,"tokenToByte.json")
 
+        # prepend bos and eos token to start of special_tokens 
+        self.special_tokens = [self.bos_token, self.eos_token] + (self.special_tokens if self.special_tokens else [])
+
         # special_token_idMap stores the token ids of the special tokens
         self.special_token_idMap = {}
-        if special_tokens: 
-            for i,token in enumerate(self.special_tokens):
-                self.special_token_idMap[token] = 257 + i
-                self.tokenToByte[self.special_token_idMap[token]] = token.encode('utf-8') 
+        for i,token in enumerate(self.special_tokens):
+            self.special_token_idMap[token] = 257 + i
+            self.tokenToByte[self.special_token_idMap[token]] = token.encode('utf-8') 
 
     def train(self, input_file_path: str): 
         """
@@ -114,15 +125,13 @@ class LLMTokenizer:
         except UnicodeDecodeError: 
             raise ValueError("Input text file could not be decoded into utf-8")
 
-        print("Encoding text into utf-8 and chunking it if special_tokens are provided ...")        
-        if self.special_tokens: 
-            # chunk the text using special_tokens and encode the chunks using utf-8
-            tokens = self._chunk_text(text)
-        else: 
-            tokens = [list(text.encode('utf-8'))]
+        print("Encoding text into utf-8 and chunking it using special_tokens ...")    
+
+        # chunk the text using special_tokens and encode the chunks using utf-8
+        tokens = self._chunk_text(text)
 
         # set the curr_vocab_size
-        curr_vocab_size = 257 + (len(self.special_tokens) if (self.special_tokens) else 0)
+        curr_vocab_size = 257 + len(self.special_tokens)
 
         print("Starting to Merge tokens ...")
         # iterate till the required vocab_size has been achieved 
@@ -167,7 +176,11 @@ class LLMTokenizer:
             "special_tokens": self.special_tokens, 
             "special_token_idMap" : self.special_token_idMap,
             "pad_token" : self.PAD_TOKEN, 
-            "pad_token_id" : self.PAD_TOKEN_ID 
+            "pad_token_id" : self.PAD_TOKEN_ID,
+            "eos_token" : self.eos_token,
+            "eos_token_id": self.eos_token_id, 
+            "bos_token" : self.bos_token, 
+            "bos_token_id": self.bos_token_id
         }
 
         with open(self.config_file_path, 'w') as f: 
@@ -224,6 +237,10 @@ class LLMTokenizer:
         self.special_token_idMap = config["special_token_idMap"]
         self.PAD_TOKEN = config["pad_token"]
         self.PAD_TOKEN_ID = config["pad_token_id"]
+        self.eos_token = config["eos_token"]
+        self.eos_token_id = config["eos_token_id"]
+        self.bos_token = config["bos_token"]
+        self.bos_token_id = config["bos_token_id"]
 
         with open(self.merges_store_path,'rb') as f: 
             self.merges = pickle.load(f)
@@ -246,11 +263,6 @@ class LLMTokenizer:
         if not isinstance(text,str): 
             raise TypeError("Input text should be in string form")
         
-        # Handle case where there are no special tokens
-        if not self.special_tokens:
-            tokens = []
-            self._encode_chunk(text, tokens)
-            return tokens
 
         # regex pattern to divide text into chunks by special_tokens
         pattern = '|'.join(map(re.escape,self.special_tokens))
@@ -449,11 +461,12 @@ if __name__ == "__main__":
     parser.add_argument("--special_tokens",nargs = '+',default = None, help = "list of special tokens in string form")
     parser.add_argument("--file_path",type = str, required=True, help = "path of training text file")
     parser.add_argument("--verbose", action="store_true",help = "will print more information related to training process")
+    parser.add_argument("--eos_token", type = str, default="<|endoftext|>", help = "string representation of end of text token")
     parser.add_argument("--config_name",type = str, default = "test", help = "name of this specific tokenizer")
     args, _ = parser.parse_known_args()
     
     # transform args to dict form
     args = vars(args)
 
-    tokenizer = LLMTokenizer(args["vocab_size"], args["special_tokens"],args["config_name"],args["verbose"])
+    tokenizer = LLMTokenizer(args["vocab_size"], args["special_tokens"],args["config_name"], args["eos_token"], args["verbose"])
     tokenizer.train(args["file_path"])
