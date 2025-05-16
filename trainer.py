@@ -1,4 +1,4 @@
-from trainer_config import LLMTrainerConfig, get_config
+from trainer_config import LLMTrainerConfig, get_trainer_config
 import torch 
 import torch.nn as nn
 from model.gpt import GPT
@@ -7,6 +7,7 @@ import random
 import numpy as np 
 import os
 from torch.utils.tensorboard.writer import SummaryWriter
+import json 
 
 
 # define paths for storing model checkpoints and tensorboard logs 
@@ -56,6 +57,9 @@ class LLMTrainer:
 
         # Defining the loss function 
         self.criterion = nn.CrossEntropyLoss()
+
+        # Create directory for storing model checkpoints and configs 
+        os.makedirs(f"{checkpoints_path}/{self.exp_name}", exist_ok=True)
 
 
     def init_weights(self, module):
@@ -137,7 +141,20 @@ class LLMTrainer:
         self.logger.close()
 
         # save the model's best state to disk 
-        torch.save(best_config, f"{checkpoints_path}/{self.exp_name}.pth")
+        torch.save(best_config, f"{checkpoints_path}/{self.exp_name}/model.pth")
+
+        # save model config in json for readability 
+        model_config = {
+            "context_len": config.context_len, 
+            "embed_dim": config.embed_dim, 
+            "vocab_size": config.vocab_size, 
+            "num_layers": config.num_layers, 
+            "num_heads": config.num_heads, 
+        }
+
+        with open(f"{checkpoints_path}/{self.exp_name}/config.json", 'w') as f: 
+            json.dump(model_config, f)
+        
 
         print(f"Best Epoch: {best_epoch}")
         print(f"Best Loss: {best_loss}")
@@ -147,7 +164,7 @@ class LLMTrainer:
 
 if __name__ == "__main__": 
 
-    config = get_config()
+    config = get_trainer_config()
     trainer = LLMTrainer(config)
     trainer.train()
                 

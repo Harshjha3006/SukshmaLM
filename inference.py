@@ -1,10 +1,11 @@
-from inference_config import get_config, LLMInferenceConfig
+from inference_config import get_inference_config, LLMInferenceConfig
 import torch 
 from model.gpt import GPT
 from tokenizer.tokenizer import LLMTokenizer
 import random
 import numpy as np 
 import torch.nn.functional as F
+import time
 
 class LLM: 
     def __init__(self, config: LLMInferenceConfig): 
@@ -12,16 +13,18 @@ class LLM:
         Main class for using an LLM in inference mode
         Args: 
             config (LLMInferenceConfig): Contains all the configuration options and hyperparameters required 
-            to use an LLM
+            to use an LLM in inference mode 
+        Raises: 
+            ValueError: if tokenizer and model's vocab_size don't match 
         """
 
         self.config = config 
         self.device = config.device
-        self.model_path = config.model_path 
-        self.max_new_tokens = config.max_new_tokens
-        self.tokenizer_config = config.tokenizer_config 
-        self.prefix = config.prefix 
-        self.context_len = config.context_len 
+        self.model_path = config.model_path                 # path to model checkpoint
+        self.max_new_tokens = config.max_new_tokens         # Maximum number of tokens llM can generate for one prompt
+        self.tokenizer_config = config.tokenizer_config     # Specific Tokenizer used 
+        self.prefix = config.prefix                         # Starting text that will be feeded into LLM for completion 
+        self.topk = config.topk                             # The number of most likely tokens from which to sample the next token 
 
         # set the seed 
         random.seed(config.seed)
@@ -32,50 +35,77 @@ class LLM:
         torch.backends.cudnn.benchmark = False
 
         # Load the model from model path 
-        self.model = GPT.from_checkpoint(self.model_path, self.device)
+        self.model, model_training_config = GPT.from_checkpoint(self.model_path, self.device)
+        self.context_len = model_training_config.context_len
 
-        # set the model to evaluation model 
+        # set the model to evaluation mode 
         self.model.eval()
 
         # Load the tokenizer for the specific tokenizer config
         self.tokenizer = LLMTokenizer()
         self.tokenizer.load_config(self.tokenizer_config)
 
+        tokenizer_vocab_size = self.tokenizer.vocab_size
+        model_vocab_size = model_training_config.vocab_size
+
+        if tokenizer_vocab_size != model_vocab_size: 
+            raise ValueError("Tokenizer and Model's vocab_size should match, Use a different tokenizer")
+
 
 
     def generate(self): 
 
-        tokens = torch.tensor(self.tokenizer.encode(self.prefix),dtype = torch.long).unsqueeze(0)
+        """
+        Generates completion based on text prefix provided through cmd line parser
+        """
+
+        # tokenize the prefix text and add a batch dimension 
+        tokens = torch.tensor(self.tokenizer.encode(self.prefix), dtype = torch.long).unsqueeze(0) # (Batch, tokens_len)
 
         print()
-        print("Language Output: ")
-        print(self.tokenizer.decode(tokens.squeeze(0).tolist()), end = '', flush = True)
+        # print the initial text on screen 
+        print(self.prefix, end = '', flush = True)
 
-        last_written = tokens.shape[-1]
+        # stores how much text has been printed 
+        printed_len = len(self.prefix)
 
+        # Keep generating tokens till max_new_tokens have not been generated 
         while tokens.shape[-1] < self.max_new_tokens:
 
             with torch.no_grad():  
             
-                logits = self.model(tokens[:, -self.context_len:].to(self.device))
+                # get logits from LLM model 
+                logits = self.model(tokens[:, -self.context_len:].to(self.device)) # (Batch, context_len, vocab_size)
+                
+                # get the logits for the next token to be generated 
+                logits = logits[:, -1, :]   # (Batch, vocab_size)
 
-                logits = logits[:, -1, :]
-
+                # Normalize the logits using softmax 
                 probs = F.softmax(logits, dim = -1)  # (Batch, vocab_size)
 
-                top_k, top_k_idx = torch.topk(probs, 50, dim = -1) # (Batch, vocab_size)
+                # Take out top_k most likely tokens 
+                top_k_probs, top_k_idx = torch.topk(probs, self.topk, dim = -1) # (Batch, top_k)
 
-                ix = torch.multinomial(top_k, num_samples= 1)   # (Batch, 1)
+                # Sample the next token to be generated from the top_k tokens 
+                ix = torch.multinomial(top_k_probs, num_samples = 1)   # (Batch, 1)
 
-                res_tokens = torch.gather(top_k_idx, -1, ix)   # (Batch, 1)
+                # Gather the indices of the sampled token 
+                next_token = torch.gather(top_k_idx, -1, ix)   # (Batch, 1)
 
-                tokens = torch.cat([tokens, res_tokens], dim = 1)  # (Batch, tokens_len)
+                # append the next token to the tokens list 
+                tokens = torch.cat([tokens, next_token], dim = 1)  # (Batch, tokens_len)
 
+                # Decode the tokens
                 decoded_text = self.tokenizer.decode(tokens.squeeze(0).tolist())
 
-                print(decoded_text[last_written:], end = '', flush= True)
+                # print only the new token 
+                print(decoded_text[printed_len:], end = '', flush= True)
 
-                last_written = tokens.shape[-1]
+                # update the printed_len 
+                printed_len = len(decoded_text)
+
+                
+                time.sleep(0.1)
 
 
         print()
@@ -84,7 +114,7 @@ class LLM:
 
 if __name__ == "__main__": 
 
-    config = get_config()
+    config = get_inference_config()
 
     llm = LLM(config)
     llm.generate()

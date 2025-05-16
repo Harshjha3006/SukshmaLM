@@ -211,7 +211,7 @@ class GPT(nn.Module):
         # Load the checkpoint
         checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
         
-        # Get the config from checkpoint
+        # Get the config (LLMTrainingConfig) from checkpoint
         config = checkpoint['config']
         
         # Create a new model instance
@@ -223,7 +223,7 @@ class GPT(nn.Module):
         # Move model to specified device
         model = model.to(device)
         
-        return model
+        return model, config
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:  
 

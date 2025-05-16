@@ -21,7 +21,7 @@ class LLMTrainerConfig:
 
 # method for getting the config properties from the user via command line 
 
-def get_config(**optional_kwargs): 
+def get_trainer_config(**optional_kwargs): 
 
     # defining the parser
     parser = argparse.ArgumentParser()
@@ -41,7 +41,6 @@ def get_config(**optional_kwargs):
     parser.add_argument("--l2reg", type = float, default=1e-3, help = "l2 regularization rate of the optimizer")
     parser.add_argument("--exp_name", type = str, default = "test", help = "Name of the training run")
     parser.add_argument("--seed", type = int, default = 248, help = "Seed value for better reproducibility")
-    parser.add_argument("--verbose", action="store_true", help = "Enables detailed training logs")
 
     # parsing the known args
     args, _ = parser.parse_known_args()

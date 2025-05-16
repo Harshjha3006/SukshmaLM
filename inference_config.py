@@ -2,7 +2,7 @@ import torch
 import argparse 
 
 
-# The main config class for LLM inference. It contains various important properties regarding LLM inference
+# The main config class for LLM inference. It contains various important configuration options required for LLM inference
 
 class LLMInferenceConfig: 
 
@@ -15,24 +15,24 @@ class LLMInferenceConfig:
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
         # setting the config properties parsed through the command line parser
-        for key,value in kwargs.items(): 
-            setattr(self,key, value)
+        for key, value in kwargs.items(): 
+            setattr(self, key, value)
 
 
 # method for getting the config properties from the user via command line 
 
-def get_config(**optional_kwargs): 
+def get_inference_config(**optional_kwargs): 
 
     # defining the parser
     parser = argparse.ArgumentParser()
 
     # define various command line arguements 
 
-    parser.add_argument("--model_path", type=str, required=True,help = "path to the model checkpoint")
-    parser.add_argument("--max_new_tokens", type=int, default=512, help = "max number of tokens that the LLM can generate")
-    parser.add_argument("--tokenizer_config",type = str, required=True,help = "name of tokenizer config you want to use")
-    parser.add_argument("--prefix", type = str, default = "Hi, i'm a language model", help = "Starting text that will be feeded into the model")
-    parser.add_argument("--context_len", type = int, default=1024, help = "context window size of the LLM")
+    parser.add_argument("--model_path", type=str, required=True, help = "path to the model checkpoint")
+    parser.add_argument("--max_new_tokens", type=int, default=512, help = "max number of tokens that the LLM can generate for one prompt")
+    parser.add_argument("--tokenizer_config",type = str, required=True, help = "The tokenizer used should have the same vocab_size as the one used in model's architecture")
+    parser.add_argument("--prefix", type = str, default = "Hi, I'm a language model", help = "Starting text that will be feeded into the model")
+    parser.add_argument("--topk", type = int, default = 50, help = "Number of Most likely tokens from which to sample the next token")
     parser.add_argument("--seed", type = int, default = 248, help = "Seed value for better reproducibility")
 
     # parsing the known args
