@@ -68,14 +68,32 @@ class LLM:
 
         # tokenize the prefix text and add a batch dimension 
         tokens = self.tokenizer.encode(self.prefix)
+
+        # position at which we should look for the logit of the next token 
+        next_token_logit = -1
+
+        # initialize a padding mask (1 for real tokens, 0 for padding tokens)
+        padding_mask = torch.ones(len(tokens), dtype = torch.bool)
         
         # pad the prefix if it's length is less the context len 
         if len(tokens) < self.context_len: 
+
+            # update the next_token_logit so the PAD tokens are ignored
+            next_token_logit = len(tokens) - 1
+
             padding_needed = (self.context_len - ((len(tokens)) % self.context_len)) % self.context_len
             tokens = tokens + ([self.tokenizer.PAD_TOKEN_ID] * padding_needed)
 
+            # append zeros to the padding mask so that PAD tokens are not attended to by the model 
+            padding_mask = torch.cat([padding_mask, torch.zeros(padding_needed, dtype = torch.bool)], dim = -1)
+
+
         # convert tokens list into a torch tensor and add a batch dimension 
         tokens = torch.tensor(tokens, dtype = torch.long).unsqueeze(0) # (Batch, tokens_len)
+
+        # add a batch dimension to padding mask 
+        padding_mask = padding_mask.unsqueeze(0) # (Batch, tokens_len)
+
 
         print()
         # print the initial text on screen 
@@ -90,10 +108,12 @@ class LLM:
             with torch.no_grad():  
             
                 # get logits from LLM model 
-                logits = self.model(tokens[:, -self.context_len:].to(self.device)) # (Batch, context_len, vocab_size)
+                logits = self.model(tokens[:, -self.context_len:].to(self.device), 
+                                    padding_mask[:, -self.context_len:].to(self.device)) # (Batch, context_len, vocab_size)
                 
+                                
                 # get the logits for the next token to be generated 
-                logits = logits[:, -1, :]   # (Batch, vocab_size)
+                logits = logits[:, next_token_logit, :]   # (Batch, vocab_size)
 
                 # Normalize the logits using softmax 
                 probs = F.softmax(logits, dim = -1)  # (Batch, vocab_size)
@@ -113,6 +133,9 @@ class LLM:
 
                 # append the next token to the tokens list 
                 tokens = torch.cat([tokens, next_token], dim = 1)  # (Batch, tokens_len)
+                
+                # update the padding mask 
+                padding_mask = torch.cat([padding_mask, torch.ones(1, 1, dtype = torch.bool)], dim = -1)
 
                 # Decode the tokens
                 decoded_text = self.tokenizer.decode(tokens.squeeze(0).tolist())
@@ -122,6 +145,9 @@ class LLM:
 
                 # update the printed_len 
                 printed_len = len(decoded_text)
+
+                # update the next_token_logit as now the last token won't be a PAD token 
+                next_token_logit = -1
 
                 
                 time.sleep(0.1)

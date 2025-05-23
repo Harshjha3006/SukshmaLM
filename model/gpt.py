@@ -31,7 +31,7 @@ class MaskedSelfAttention(nn.Module):
         self.value = nn.Linear(embed_dim, embed_dim)
 
         # Attention mask of shape (context_len, context_len) to prevent tokens from interacting with future tokens
-        self.register_buffer("tril", torch.tril(torch.ones(context_len,context_len)))
+        self.register_buffer("tril", torch.tril(torch.ones(context_len, context_len, dtype = torch.bool)))
 
         # Dropout layer for regularization 
         self.dropout = nn.Dropout(dropout_rate)
@@ -40,7 +40,7 @@ class MaskedSelfAttention(nn.Module):
         self.proj = nn.Linear(embed_dim, embed_dim)
 
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor: 
+    def forward(self, x: torch.Tensor, padding_mask: torch.Tensor = None) -> torch.Tensor: 
             
         # Unpacking dimensions of input tensor 
         Batch, Context_len, Embed_dim = x.shape 
@@ -61,10 +61,21 @@ class MaskedSelfAttention(nn.Module):
 
         # Compute scaled attention matrices for each head 
         # Compute affinity between tokens 
-        attention = torch.matmul(q, k.transpose(-1,-2)) / (Embed_dim ** 0.5) # (Batch, Num_heads, Context_len, Context_len)
+        attention = torch.matmul(q, k.transpose(-1,-2)) / (self.head_dim ** 0.5) # (Batch, Num_heads, Context_len, Context_len)
+
+        # Create a combined mask from causal and padding masks
+        mask = self.tril   # (Context_len, Context_len)
+
+        if padding_mask is not None: 
+            # reshape the padding mask to make it suitable for combining with causal mask
+            padding_mask = padding_mask.unsqueeze(1).unsqueeze(1) # (Batch, 1, 1, Context_len)
+            padding_mask = padding_mask & padding_mask.transpose(-1,-2) # (Batch, 1, Context_len, Context_len)
+
+            mask = mask & padding_mask
+
 
         # Mask the attention matrix so that tokens don't attend to future tokens 
-        attention = torch.masked_fill(attention, self.tril[:Context_len, :Context_len] == 0, float('-inf')) # (Batch, Num_heads, Context_len, Context_len)
+        attention = torch.masked_fill(attention, ~mask, -1e9) # (Batch, Num_heads, Context_len, Context_len)
 
         # compute softmax for normalization 
         attention = F.softmax(attention, dim = -1) # (Batch, Num_heads, Context_len, Context_len)
@@ -145,9 +156,9 @@ class TransformerBlock(nn.Module):
         # residual scaling factor 
         self.res_scaling_factor = 1 / (num_layers ** 0.5)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor: 
+    def forward(self, x: torch.Tensor, padding_mask: torch.Tensor = None) -> torch.Tensor: 
 
-        x = x + self.res_scaling_factor * self.attention(self.ln1(x))
+        x = x + self.res_scaling_factor * self.attention(self.ln1(x), padding_mask)
 
         x = x + self.res_scaling_factor * self.ffd(self.ln2(x))
 
@@ -186,7 +197,7 @@ class GPT(nn.Module):
 
         # Multiple Transformer Blocks 
         # (Batch, context_len, embed_dim) -> (Batch, context_len, embed_dim)
-        self.blocks = nn.Sequential(*[TransformerBlock(self.embed_dim, self.num_heads, self.context_len, self.dropout_rate, self.num_layers)
+        self.blocks = nn.ModuleList([TransformerBlock(self.embed_dim, self.num_heads, self.context_len, self.dropout_rate, self.num_layers)
                                       for _ in range(self.num_layers)])
 
         # Reverse Embedding 
@@ -225,7 +236,7 @@ class GPT(nn.Module):
         
         return model, config
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:  
+    def forward(self, x: torch.Tensor, padding_mask: torch.Tensor = None) -> torch.Tensor:  
 
         # x of shape (Batch, Context_len)
         Batch, Context_len = x.shape
@@ -237,7 +248,8 @@ class GPT(nn.Module):
         x = x + self.positional_encoding(self.pos_tensor) # (Batch, Context_len, Embed_dim)
 
         # Feed the input vectors x through the Transformer Blocks 
-        x = self.blocks(x) # (Batch, Context_len, Embed_dim)
+        for block in self.blocks: 
+            x = block(x, padding_mask) # (Batch, Context_len, Embed_dim)
 
         # Compute logits over the vocabulary
         logits = self.reverse_embedding(x) # (Batch, Context_len, vocab_size)
