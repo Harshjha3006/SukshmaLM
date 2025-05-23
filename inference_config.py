@@ -35,7 +35,7 @@ def get_inference_config(**optional_kwargs):
     parser.add_argument("--topk", type = int, default = 50, help = "Number of Most likely tokens from which to sample the next token")
     parser.add_argument("--seed", type = int, default = 248, help = "Seed value for better reproducibility")
     parser.add_argument("--skip_special_tokens", action = 'store_true', help = "if set, special tokens will not be printed")
-
+    parser.add_argument("--temperature", type = float, default=1.0, help = "Sets the degree of randomness of the LLM")
     # parsing the known args
     args, _ = parser.parse_known_args()
     # converting args to dict form

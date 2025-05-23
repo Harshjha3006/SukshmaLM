@@ -27,6 +27,7 @@ class LLM:
         self.tokenizer_config = config.tokenizer_config     # Specific Tokenizer used 
         self.prefix = config.prefix                         # Starting text that will be feeded into LLM for completion 
         self.topk = config.topk                             # The number of most likely tokens from which to sample the next token
+        self.temperature = config.temperature               # Sets the degree of randomness of the LLM
         self.skip_special_tokens = config.skip_special_tokens  # if set, special tokens will not be printed 
 
         # set the seed 
@@ -115,6 +116,9 @@ class LLM:
                                 
                 # get the logits for the next token to be generated 
                 logits = logits[:, next_token_logit, :]   # (Batch, vocab_size)
+
+                # Apply the temperature
+                logits /= self.temperature
 
                 # Normalize the logits using softmax 
                 probs = F.softmax(logits, dim = -1)  # (Batch, vocab_size)
