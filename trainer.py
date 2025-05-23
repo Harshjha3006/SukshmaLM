@@ -110,6 +110,9 @@ class LLMTrainer:
 
                 # compute gradients
                 loss.backward()
+
+                # gradient clipping
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                 
                 # update model weights 
                 self.optimizer.step()
