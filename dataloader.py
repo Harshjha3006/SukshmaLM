@@ -6,14 +6,16 @@ import pickle
 # Class for encapsulating text data for the LLM
 
 class LLMDataset(Dataset):
-    def __init__(self, data_path: str,context_length: int): 
+    def __init__(self, data_path: str,context_length: int, vocab_size: int): 
         """
         Dataset class for an LLM
         Args: 
             data_path (str): path to the tokenized dataset 
             context_length (int): Maximum number of tokens an LLM can process simultaneously, i.e. its context window 
+            vocab_size (int): vocab_size of the model 
         Raises: 
             FileNotFoundError: if data_path is not a valid path
+            ValueError: if model's vocab_size does not match tokenized data's vocab_size 
         """
         
         # Raising error if data_path is not valid
@@ -22,7 +24,13 @@ class LLMDataset(Dataset):
         
         # Reading tokenized data 
         with open(data_path, 'rb') as file: 
-            self.data = pickle.load(file)
+            tokenized_data = pickle.load(file)
+            self.data = tokenized_data["data"]
+            data_vocab_size = tokenized_data["vocab_size"]
+
+        # checking if model's vocab_size matches tokenized_data's vocab_size (or the vocab_size of the tokenizer that was used to produce the tokenized data)
+        if data_vocab_size != vocab_size: 
+            raise ValueError(f"Model's vocab size: {vocab_size}, does not match tokenized data's vocab size: {data_vocab_size}")
 
         # block_size represents the size of one training example
         self.block_size = context_length + 1
@@ -57,6 +65,6 @@ class LLMDataset(Dataset):
 def get_dataloader(config): 
 
     # initializing the dataset 
-    llmDataset = LLMDataset(config.training_data_path, config.context_len)
+    llmDataset = LLMDataset(config.training_data_path, config.context_len, config.vocab_size)
     # wrapping the dataset inside a dataloader and returning it 
     return DataLoader(llmDataset, batch_size=config.batch_size, shuffle=True, pin_memory=True,drop_last=True)

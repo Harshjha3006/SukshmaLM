@@ -54,8 +54,9 @@ class LLM:
         tokenizer_vocab_size = self.tokenizer.vocab_size
         model_vocab_size = model_training_config.vocab_size
 
+        # checking if tokenizer's vocab_size and model's vocab_size match 
         if tokenizer_vocab_size != model_vocab_size: 
-            raise ValueError("Tokenizer and Model's vocab_size should match, Use a different tokenizer")
+            raise ValueError(f"Tokenizer's vocab_size: {tokenizer_vocab_size}, does not match with Model's vocab_size: {model_vocab_size}, use a different tokenizer !!")
 
 
 
@@ -66,7 +67,15 @@ class LLM:
         """
 
         # tokenize the prefix text and add a batch dimension 
-        tokens = torch.tensor(self.tokenizer.encode(self.prefix), dtype = torch.long).unsqueeze(0) # (Batch, tokens_len)
+        tokens = self.tokenizer.encode(self.prefix)
+        
+        # pad the prefix if it's length is less the context len 
+        if len(tokens) < self.context_len: 
+            padding_needed = (self.context_len - ((len(tokens)) % self.context_len)) % self.context_len
+            tokens = tokens + ([self.tokenizer.PAD_TOKEN_ID] * padding_needed)
+
+        # convert tokens list into a torch tensor and add a batch dimension 
+        tokens = torch.tensor(tokens, dtype = torch.long).unsqueeze(0) # (Batch, tokens_len)
 
         print()
         # print the initial text on screen 

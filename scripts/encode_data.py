@@ -40,8 +40,13 @@ if __name__ == "__main__":
     input_file_name = os.path.splitext(os.path.basename(args_dict["input_file"]))[0]
     output_file = os.path.join(args_dict["output_dir"],f"{input_file_name}_tokens.pkl")
 
+    tokenized_data = {
+        "vocab_size": tokenizer.vocab_size, 
+        "data": tokens
+    }
+
     with open(output_file,'wb') as file: 
-        pickle.dump(tokens, file)
+        pickle.dump(tokenized_data, file)
 
     print(f"Tokenized Data Serialized to disk at {output_file}")        
 
