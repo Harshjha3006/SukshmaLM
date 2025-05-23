@@ -26,7 +26,8 @@ class LLM:
         self.max_new_tokens = config.max_new_tokens         # Maximum number of tokens llM can generate for one prompt
         self.tokenizer_config = config.tokenizer_config     # Specific Tokenizer used 
         self.prefix = config.prefix                         # Starting text that will be feeded into LLM for completion 
-        self.topk = config.topk                             # The number of most likely tokens from which to sample the next token 
+        self.topk = config.topk                             # The number of most likely tokens from which to sample the next token
+        self.skip_special_tokens = config.skip_special_tokens  # if set, special tokens will not be printed 
 
         # set the seed 
         random.seed(config.seed)
@@ -138,10 +139,14 @@ class LLM:
                 padding_mask = torch.cat([padding_mask, torch.ones(1, 1, dtype = torch.bool)], dim = -1)
 
                 # Decode the tokens
-                decoded_text = self.tokenizer.decode(tokens.squeeze(0).tolist())
+                if self.skip_special_tokens:
+                    decoded_text = self.tokenizer.decode_skip_special(tokens.squeeze(0).tolist())
+                else:
+                    decoded_text = self.tokenizer.decode(tokens.squeeze(0).tolist())
 
                 # print only the new token 
-                print(decoded_text[printed_len:], end = '', flush= True)
+                if len(decoded_text) > printed_len:
+                    print(decoded_text[printed_len:], end = '', flush= True)
 
                 # update the printed_len 
                 printed_len = len(decoded_text)

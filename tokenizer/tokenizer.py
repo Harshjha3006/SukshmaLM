@@ -321,6 +321,39 @@ class LLMTokenizer:
         byte_string = b''.join(self.tokenToByte[token] for token in tokens)
 
         return byte_string.decode('utf-8',errors='replace')
+    
+    def decode_skip_special(self, tokens: list[int]) -> str: 
+        """
+        Decodes a list of numerical tokens back into string form
+        while skipping special tokens
+        Args: 
+            tokens (list[int]): the list of input tokens
+        Returns: 
+            Decoded form of the tokens
+        Raises: 
+            TypeError if the tokens is not a list of ints
+            ValueError if tokens are out of valid range 
+        """
+
+        # input validation 
+        if not isinstance(tokens,list): 
+            raise TypeError("tokens must be a list")
+        if not all(isinstance(token,int) for token in tokens): 
+            raise TypeError("Each token must be an int")
+        for token in tokens: 
+            if not (0 <= token < self.vocab_size):
+                raise ValueError(f"Token id {token} is out of valid range [0 - {self.vocab_size - 1}]")
+            
+        # create a new tokens list with no special tokens 
+        tokens_to_be_decoded = []
+        for token in tokens: 
+            if token in self.special_token_idMap.values() or token == self.PAD_TOKEN_ID: 
+                continue
+            tokens_to_be_decoded.append(token)
+
+        byte_string = b''.join(self.tokenToByte[token] for token in tokens_to_be_decoded)
+
+        return byte_string.decode('utf-8',errors='replace')    
 
     def _encode_chunk(self,chunk: str, tokens: list[int]):
         """

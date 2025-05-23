@@ -34,6 +34,7 @@ def get_inference_config(**optional_kwargs):
     parser.add_argument("--prefix", type = str, default = "Hi, I'm a language model", help = "Starting text that will be feeded into the model")
     parser.add_argument("--topk", type = int, default = 50, help = "Number of Most likely tokens from which to sample the next token")
     parser.add_argument("--seed", type = int, default = 248, help = "Seed value for better reproducibility")
+    parser.add_argument("--skip_special_tokens", action = 'store_true', help = "if set, special tokens will not be printed")
 
     # parsing the known args
     args, _ = parser.parse_known_args()
