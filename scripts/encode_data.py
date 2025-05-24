@@ -29,11 +29,10 @@ if __name__ == "__main__":
     tokenizer.load_config(args_dict["tokenizer_config"])
     tokens = tokenizer.encode(text)
 
-    # Adding padding tokens if required
+    # Drop some tokens if required
     block_size = args_dict["context_len"] + 1
-    padding_needed = (block_size - (len(tokens) % block_size)) % block_size
-    if padding_needed > 0:
-        tokens = tokens + ([tokenizer.PAD_TOKEN_ID] * padding_needed)
+    num_blocks = len(tokens) // block_size
+    tokens = tokens[:(num_blocks * block_size)]
 
     # storing the tokens in the output_dir 
     os.makedirs(args_dict["output_dir"],exist_ok=True)
