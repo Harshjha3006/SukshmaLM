@@ -516,7 +516,7 @@ class LLMTokenizer:
 if __name__ == "__main__": 
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--vocab_size",type = int,default= 257,help = "vocab_size of the vocabulary")
+    parser.add_argument("--vocab_size",type = int,default= 259,help = "vocab_size of the vocabulary")
     parser.add_argument("--special_tokens",nargs = '+',default = None, help = "list of special tokens in string form")
     parser.add_argument("--file_path",type = str, required=True, help = "path of training text file")
     parser.add_argument("--verbose", action="store_true",help = "will print more information related to training process")
