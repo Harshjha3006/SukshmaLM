@@ -71,23 +71,17 @@ class LLM:
         # tokenize the prefix text and add a batch dimension 
         tokens = self.tokenizer.encode(self.prefix)
 
-        # position at which we should look for the logit of the next token 
-        next_token_logit = -1
-
         # initialize a padding mask (1 for real tokens, 0 for padding tokens)
         padding_mask = torch.ones(len(tokens), dtype = torch.bool)
         
         # pad the prefix if it's length is less the context len 
         if len(tokens) < self.context_len: 
 
-            # update the next_token_logit so the PAD tokens are ignored
-            next_token_logit = len(tokens) - 1
-
             padding_needed = (self.context_len - ((len(tokens)) % self.context_len)) % self.context_len
-            tokens = tokens + ([self.tokenizer.PAD_TOKEN_ID] * padding_needed)
+            tokens = ([self.tokenizer.PAD_TOKEN_ID] * padding_needed) + tokens
 
-            # append zeros to the padding mask so that PAD tokens are not attended to by the model 
-            padding_mask = torch.cat([padding_mask, torch.zeros(padding_needed, dtype = torch.bool)], dim = -1)
+            # prepend zeros to the padding mask so that PAD tokens are not attended to by the model 
+            padding_mask = torch.cat([torch.zeros(padding_needed, dtype = torch.bool), padding_mask], dim = -1)
 
 
         # convert tokens list into a torch tensor and add a batch dimension 
@@ -95,7 +89,6 @@ class LLM:
 
         # add a batch dimension to padding mask 
         padding_mask = padding_mask.unsqueeze(0) # (Batch, tokens_len)
-
 
         print()
         # print the initial text on screen 
@@ -115,7 +108,7 @@ class LLM:
                 
                                 
                 # get the logits for the next token to be generated 
-                logits = logits[:, next_token_logit, :]   # (Batch, vocab_size)
+                logits = logits[:, -1, :]   # (Batch, vocab_size)
 
                 # Apply the temperature
                 logits /= self.temperature
@@ -146,7 +139,7 @@ class LLM:
                 if self.skip_special_tokens:
                     decoded_text = self.tokenizer.decode_skip_special(tokens.squeeze(0).tolist())
                 else:
-                    decoded_text = self.tokenizer.decode(tokens.squeeze(0).tolist())
+                    decoded_text = self.tokenizer.decode_skip_pad(tokens.squeeze(0).tolist())
 
                 # print only the new token 
                 if len(decoded_text) > printed_len:
@@ -154,10 +147,6 @@ class LLM:
 
                 # update the printed_len 
                 printed_len = len(decoded_text)
-
-                # update the next_token_logit as now the last token won't be a PAD token 
-                next_token_logit = -1
-
                 
                 time.sleep(0.1)
 
