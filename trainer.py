@@ -9,6 +9,7 @@ import os
 from torch.utils.tensorboard.writer import SummaryWriter
 import json 
 from tqdm import tqdm
+import math 
 
 
 # define paths for storing model checkpoints and tensorboard logs 
@@ -36,6 +37,9 @@ class LLMTrainer:
         self.exp_name = config.exp_name             # Experiment Name 
         self.device = config.device                 # device -> cpu or gpu 
         self.dataloader = get_dataloader(config)    # training dataloader 
+        self.warmup_steps = config.warmup_steps     # warmup steps for the cosine lr scheduler 
+        self.batch_size = config.batch_size         # batch size of the dataloader
+        self.max_steps = (len(self.dataloader) / self.batch_size) * self.num_epochs  # total steps of the training process 
 
         self.model = GPT(config).to(self.device)    # LLM model transferred to configured device 
         self.model.apply(self.init_weights)         # Apply initialization to all layers 
@@ -62,6 +66,22 @@ class LLMTrainer:
         # Create directory for storing model checkpoints and configs 
         os.makedirs(f"{checkpoints_path}/{self.exp_name}", exist_ok=True)
 
+    
+    def get_lr(self, step): 
+        """
+        Returns the value of the learning rate for the provided step 
+        Args: 
+            step (int): the current step in the training process
+        """
+
+        if step < self.warmup_steps: 
+            return self.lr * (step / self.warmup_steps)
+        
+        else: 
+            progress = (step - self.warmup_steps) / (self.max_steps - self.warmup_steps)
+            return 0.5 * self.lr * (1 + math.cos(math.pi * progress))
+
+
 
     def init_weights(self, module):
 
@@ -85,7 +105,9 @@ class LLMTrainer:
 
         # set the model to training mode 
         self.model.train()
-
+        
+        # count of iterations
+        steps = 0
 
         # iterate till self.num_epochs
         for epoch in range(self.num_epochs): 
@@ -114,12 +136,22 @@ class LLMTrainer:
 
                 # gradient clipping
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+
+                # get the current lr as per the cosine scheduler
+                lr = self.get_lr(steps)
+
+                # set this lr in the optimizer
+                for param_group in self.optimizer.param_groups: 
+                    param_group["lr"] = lr
                 
                 # update model weights 
                 self.optimizer.step()
 
                 # append this batch's loss to the loss history 
                 loss_history.append(loss.item())
+
+                # update steps
+                steps += 1
 
 
             # compute avg loss for whole epoch 

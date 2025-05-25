@@ -67,4 +67,4 @@ def get_dataloader(config):
     # initializing the dataset 
     llmDataset = LLMDataset(config.training_data_path, config.context_len, config.vocab_size)
     # wrapping the dataset inside a dataloader and returning it 
-    return DataLoader(llmDataset, batch_size=config.batch_size, shuffle=True, pin_memory=True)
+    return DataLoader(llmDataset, batch_size=config.batch_size, shuffle=True, pin_memory=True, drop_last=True)
