@@ -38,8 +38,7 @@ class LLMTrainer:
         self.device = config.device                 # device -> cpu or gpu 
         self.dataloader = get_dataloader(config)    # training dataloader 
         self.warmup_steps = config.warmup_steps     # warmup steps for the cosine lr scheduler 
-        self.batch_size = config.batch_size         # batch size of the dataloader
-        self.max_steps = (len(self.dataloader) / self.batch_size) * self.num_epochs  # total steps of the training process 
+        self.max_steps = len(self.dataloader) * self.num_epochs  # total steps of the training process 
 
         self.model = GPT(config).to(self.device)    # LLM model transferred to configured device 
         self.model.apply(self.init_weights)         # Apply initialization to all layers 
