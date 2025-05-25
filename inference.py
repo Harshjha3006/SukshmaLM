@@ -98,7 +98,7 @@ class LLM:
         printed_len = len(self.prefix)
 
         # Keep generating tokens till max_new_tokens have not been generated 
-        while tokens.shape[-1] < self.max_new_tokens:
+        for _ in range(self.max_new_tokens):
 
             with torch.no_grad():  
             

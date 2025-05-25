@@ -8,6 +8,7 @@ import numpy as np
 import os
 from torch.utils.tensorboard.writer import SummaryWriter
 import json 
+from tqdm import tqdm
 
 
 # define paths for storing model checkpoints and tensorboard logs 
@@ -93,7 +94,7 @@ class LLMTrainer:
             loss_history = []
 
             # iterate over all batches of training data 
-            for x, y in self.dataloader: 
+            for x, y in tqdm(self.dataloader): 
 
                 # move the inputs and targets to the appropriate device 
                 x = x.to(self.device) # (Batch, Context_len)
