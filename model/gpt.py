@@ -113,7 +113,7 @@ class FeedForward(nn.Module):
 
         self.fflayer = nn.Sequential(
             nn.Linear(embed_dim, 4 * embed_dim),  # expand the dimensions for increasing expressiveness of model
-            nn.ReLU(),                            # non linearity 
+            nn.GELU(),                            # non linearity 
             nn.Linear(4 * embed_dim, embed_dim),  # projection into residual pathway 
             nn.Dropout(dropout_rate)              # dropout for regularization 
         )   
