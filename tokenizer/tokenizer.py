@@ -3,6 +3,7 @@ import json
 import re
 import argparse
 import pickle
+from tqdm import tqdm
 
 class LLMTokenizer: 
 
@@ -268,6 +269,7 @@ class LLMTokenizer:
         pattern = '|'.join(map(re.escape,self.special_tokens))
 
         # find the special tokens in the text
+        print("Chunking text based on special tokens ...")
         matches = list(re.finditer(pattern, text))
 
         # starting index of current chunk 
@@ -277,7 +279,9 @@ class LLMTokenizer:
         tokens = []
 
         # iterate over chunks
-        for match in matches: 
+        print("Encoding Chunks ...")
+        for match in tqdm(matches): 
+
             # indices of special_token [special_start,special_end)
             special_start,special_end = match.span()
 
@@ -292,6 +296,7 @@ class LLMTokenizer:
 
         # encode the last chunk 
         if start < len(text): 
+            print("Encoding terminal chunk ...")
             self._encode_chunk(text[start:],tokens)
 
         return tokens
