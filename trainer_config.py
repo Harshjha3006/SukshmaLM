@@ -42,6 +42,8 @@ def get_trainer_config(**optional_kwargs):
     parser.add_argument("--l2reg", type = float, default=1e-3, help = "l2 regularization rate of the optimizer")
     parser.add_argument("--exp_name", type = str, default = "test", help = "Name of the training run")
     parser.add_argument("--seed", type = int, default = 248, help = "Seed value for better reproducibility")
+    parser.add_argument("--logging_steps", type = int, default = 100, help = "steps where current loss will be logged")
+    parser.add_argument("--eval_steps", type = int, default= 500, help = "steps where model's current best state will be saved")
 
     # parsing the known args
     args, _ = parser.parse_known_args()

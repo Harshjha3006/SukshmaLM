@@ -8,7 +8,6 @@ import numpy as np
 import os
 from torch.utils.tensorboard.writer import SummaryWriter
 import json 
-from tqdm import tqdm
 import math 
 
 
@@ -39,6 +38,8 @@ class LLMTrainer:
         self.dataloader = get_dataloader(config)    # training dataloader 
         self.warmup_steps = config.warmup_steps     # warmup steps for the cosine lr scheduler 
         self.max_steps = len(self.dataloader) * self.num_epochs  # total steps of the training process 
+        self.logging_steps = config.logging_steps    # steps where current loss will be logged
+        self.eval_steps = config.eval_steps          # steps where model's current best state will be saved 
 
         self.model = GPT(config).to(self.device)    # LLM model transferred to configured device 
         self.model.apply(self.init_weights)         # Apply initialization to all layers 
@@ -98,9 +99,23 @@ class LLMTrainer:
         Trains the LLM with the given hyperparameters 
         """
 
-        best_epoch = 0   # The epoch with lowest loss
+        best_step = 0   # The step with lowest loss
         best_loss = 1e9
         best_config = None # used for later saving model's best state to disk 
+
+
+        # save model config in json for readability 
+        model_config = {
+            "context_len": self.config.context_len, 
+            "embed_dim": self.config.embed_dim, 
+            "vocab_size": self.config.vocab_size, 
+            "num_layers": self.config.num_layers, 
+            "num_heads": self.config.num_heads, 
+        }
+
+        with open(f"{checkpoints_path}/{self.exp_name}/config.json", 'w') as f: 
+            json.dump(model_config, f)
+
 
         # set the model to training mode 
         self.model.train()
@@ -111,11 +126,8 @@ class LLMTrainer:
         # iterate till self.num_epochs
         for epoch in range(self.num_epochs): 
 
-            # contains list of losses of each batch 
-            loss_history = []
-
             # iterate over all batches of training data 
-            for x, y in tqdm(self.dataloader): 
+            for x, y in self.dataloader: 
 
                 # move the inputs and targets to the appropriate device 
                 x = x.to(self.device) # (Batch, Context_len)
@@ -146,53 +158,34 @@ class LLMTrainer:
                 # update model weights 
                 self.optimizer.step()
 
-                # append this batch's loss to the loss history 
-                loss_history.append(loss.item())
+                # log the loss if it is a logging step 
+                if steps % self.logging_steps == 0: 
+                    print(f"Epoch {epoch + 1}, Step {steps}/{self.max_steps}: Loss: {loss.item()}")
+                    self.logger.add_scalar("Loss", loss.item(), steps)
+
+                # save the current best state of the model if it is an eval step 
+                if steps % self.eval_steps == 0: 
+                    if loss.item() < best_loss: 
+                        best_loss = loss.item()
+                        best_step = steps
+                        best_config = {
+                            "model_state_dict" : self.model.state_dict(), 
+                            "optimizer" : self.optimizer.state_dict(),
+                            "best_step" : best_step, 
+                            "config": self.config
+                        }
+
+                    # save the model's best state to disk 
+                    torch.save(best_config, f"{checkpoints_path}/{self.exp_name}/model.pth")
 
                 # update steps
                 steps += 1
 
 
-            # compute avg loss for whole epoch 
-            avg_loss = np.mean(loss_history)
-
-            # update best_loss, best_epoch and best_config if current epoch's loss is the lowest till now
-            if avg_loss < best_loss: 
-                best_loss = avg_loss
-                best_epoch = epoch + 1
-                best_config = {
-                    "model_state_dict" : self.model.state_dict(), 
-                    "optimizer" : self.optimizer.state_dict(),
-                    "epoch" : epoch + 1, 
-                    "config": self.config
-                }
-
-            # print and log current epoch' loss 
-            print(f"Epoch {epoch + 1}: Loss: {avg_loss}")
-            self.logger.add_scalar("Loss", avg_loss, epoch + 1)
-
-
         # close the logger 
         self.logger.close()
 
-        # save the model's best state to disk 
-        torch.save(best_config, f"{checkpoints_path}/{self.exp_name}/model.pth")
-
-        # save model config in json for readability 
-        model_config = {
-            "context_len": config.context_len, 
-            "embed_dim": config.embed_dim, 
-            "vocab_size": config.vocab_size, 
-            "num_layers": config.num_layers, 
-            "num_heads": config.num_heads, 
-        }
-
-        with open(f"{checkpoints_path}/{self.exp_name}/config.json", 'w') as f: 
-            json.dump(model_config, f)
-        
-
-        print(f"Best Epoch: {best_epoch}")
-        print(f"Best Loss: {best_loss}")
+        print(f"Best Step: {best_step}, Best Loss: {best_loss}")
 
 
 
