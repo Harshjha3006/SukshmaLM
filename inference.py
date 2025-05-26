@@ -5,7 +5,6 @@ from tokenizer.tokenizer import LLMTokenizer
 import random
 import numpy as np 
 import torch.nn.functional as F
-import time
 import os
 
 class LLM: 
@@ -147,9 +146,6 @@ class LLM:
 
                 # update the printed_len 
                 printed_len = len(decoded_text)
-                
-                time.sleep(0.1)
-
 
         print()
         print()

@@ -1,40 +1,9 @@
 A BPE tokenizer for tokenizing text data for consumption by LLMs. 
 
-## Installation
 
-### 1. Clone the Repository
+### Running Tests
 
-First, clone the repository to your local machine:
-
-```bash
-git clone https://github.com/Harshjha3006/SukshmaLM.git
-cd SukshmaLM
-```
-
-### 2. Install Dependencies
-
-The tokenizer requires Python 3.x. While most dependencies are from Python's standard library, you'll need to install pytest for running tests.
-
-#### Using pip
-
-```bash
-pip install -r requirements.txt
-```
-or you can manually install the required package
-
-```bash
-pip install pytest==8.3.5
-```
-
-Standard library packages used (no installation needed):
-- os
-- json
-- re
-- argparse
-- pickle
-
-### 3. Running Tests
-
+Before running the tests, make sure there are 2 tokenizer configs saved as "sample1" and "sample2" with vocab_sizes 300 and 500 respectively, special_tokens as "|<im_start>|" and "|<im_end>|" respectively so that tests pass successfully. 
 To run the test suite, use the following command from the project root directory:
 
 ```bash
@@ -54,19 +23,20 @@ pytest -v tests/
 To train the tokenizer on your text data, use the following command:
 
 ```bash
-python tokenizer/tokenizer.py --vocab_size <VOCAB_SIZE> --special_tokens <TOKEN1> <TOKEN2> ... --file_path <TRAINING_FILE_PATH> --config_name <CONFIG_NAME> [--verbose]
+python tokenizer/tokenizer.py --vocab_size <VOCAB_SIZE> --special_tokens <TOKEN1> <TOKEN2> ... --file_path <TRAINING_FILE_PATH> --config_name <CONFIG_NAME> --eos_token <EOS_TOKEN> [--verbose]
 ```
 
 Parameters:
-- `--vocab_size`: Total number of tokens in the vocabulary (must be ≥ 256 + number of special tokens), default value = 256
-- `--special_tokens`: List of special tokens to be included in the vocabulary, default value = None 
+- `--vocab_size`: Total number of tokens in the vocabulary (must be ≥ 259 + number of user-provided special tokens), default value = 259
+- `--special_tokens`: List of special tokens to be included in the vocabulary, default value = ["<|bos|>", eos_token] which are beginning of text and end of text tokens respectively  
 - `--file_path`(required): Path to the training text file
 - `--config_name`: Name of the tokenizer config, tokenizer-specific output files will be stored in the directory "tokenizer/{config_name}" and you can later load a specific tokenizer config as shown later in this readme, default value = "test"
+- `--eos_token`: String representation of the end of text token you want to use for your tokenizer 
 - `--verbose`: (Optional) Enable detailed training progress logs
 
 Example:
 ```bash
-python tokenizer/tokenizer.py --vocab_size 1000 --special_tokens "<|endoftext|>" "<|im_start|>" --file_path training_data.txt --config_name "sample_config" --verbose
+python tokenizer/tokenizer.py --vocab_size 1000 --special_tokens "<|endoftext|>" "<|im_start|>" --file_path training_data.txt --config_name "sample_config" --eos_token="<|eos|>" --verbose
 ```
 
 ### Importing the Tokenizer
@@ -112,10 +82,10 @@ print(f"Decoded text: {decoded}")
 ## How It Works
 
 1. The tokenizer starts with a base vocabulary of 256 single-byte tokens
-2. Special tokens are added to the vocabulary
+2. Special tokens are added to the vocabulary including padding token, bos and eos tokens 
 3. During training, it:
    - Reads the input text file
-   - Chunks the text using special tokens (if any special_tokens are specified)
+   - Chunks the text using special tokens
    - Iteratively merges the most frequent token pairs until reaching the desired vocabulary size
 4. The trained tokenizer can then encode text into tokens and decode tokens back into text
 
@@ -132,5 +102,5 @@ After training, the tokenizer generates the following files in the `tokenizer/{c
 
 - The input text file must be UTF-8 encodable
 - Special tokens must be unique, non-empty and non-overlapping
-- Vocabulary size must be at least 256 + number of special tokens
+- Vocabulary size must be at least 259 + number of user-provided special tokens
 - The tokenizer automatically creates a `tokenizer/{config_name}` directory to store its output files 
