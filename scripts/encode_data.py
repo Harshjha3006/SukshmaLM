@@ -8,7 +8,6 @@ if __name__ == "__main__":
     parser.add_argument("--input_file",type = str,required=True,help = "path of the input text file")
     parser.add_argument("--output_dir",type = str,required = True, help = "path of the output directory where tokens will be stored")
     parser.add_argument("--tokenizer_config",type = str, required=True,help = "name of tokenizer config you want to use")
-    parser.add_argument("--context_len", type = int, required=True, help = "context length of the LLM")
     args, _ = parser.parse_known_args()
     args_dict = vars(args)
 
@@ -28,11 +27,6 @@ if __name__ == "__main__":
     tokenizer = LLMTokenizer()
     tokenizer.load_config(args_dict["tokenizer_config"])
     tokens = tokenizer.encode(text)
-
-    # Drop some tokens if required
-    block_size = args_dict["context_len"] + 1
-    num_blocks = len(tokens) // block_size
-    tokens = tokens[:(num_blocks * block_size)]
 
     # storing the tokens in the output_dir 
     os.makedirs(args_dict["output_dir"],exist_ok=True)

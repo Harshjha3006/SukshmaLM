@@ -28,12 +28,15 @@ class LLMDataset(Dataset):
             self.data = tokenized_data["data"]
             data_vocab_size = tokenized_data["vocab_size"]
 
+        # Drop some tokens if required
+        self.block_size = context_length + 1 # block size represents size of 1 training sample 
+        num_blocks = len(self.data) // self.block_size 
+        self.data = self.data[:(num_blocks * self.block_size)]
+
         # checking if model's vocab_size matches tokenized_data's vocab_size (or the vocab_size of the tokenizer that was used to produce the tokenized data)
         if data_vocab_size != vocab_size: 
             raise ValueError(f"Model's vocab size: {vocab_size}, does not match tokenized data's vocab size: {data_vocab_size}")
 
-        # block_size represents the size of one training example
-        self.block_size = context_length + 1
 
     def __len__(self) -> int: 
         """
