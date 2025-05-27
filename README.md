@@ -8,7 +8,7 @@ SukshmaLM (where "Sukshma" is a Hindi word which means "very small") is a lightw
 - Decoder-only transformer architecture
 - Customizable model parameters (embedding dimension, number of layers, attention heads, etc.)
 - Training with configurable hyperparameters
-- Inference with various generation strategies (top-k sampling, temperature control) and other options like skip_special_tokens
+- Inference with various generation strategies (top-k sampling, temperature control, skip_special_tokens)
 - TensorBoard integration for training monitoring
 - Checkpoint saving and loading
 
@@ -26,6 +26,13 @@ cd SukshmaLM
 pip install -r requirements.txt
 ```
 
+## Steps to follow for training your own LLM and using it 
+
+- Choose a text file as training data for training your tokenizer, train it on the data and save it. More Details at [tokenizer/README.md](tokenizer/README.md)
+- Choose a text file as training data for training your LLM, tokenize it using your trained tokenizer. More Details at [Encoding data](#encoding-data)
+- Train your own LLM using the tokenized data (a pickle file), set appropriate hyperparameters. More Details at [Training](#training)
+- Generate completions using the trained LLM. More Details at [Inference](#inference)
+
 ## Project Structure
 
 - `model/`: Contains the transformer model implementation
@@ -33,7 +40,7 @@ pip install -r requirements.txt
 - `checkpoints/`: Saved model checkpoints
 - `tensorboard_logs/`: Training logs for visualization
 - `scripts/`: Contains a utility script for encoding a text file into a pkl file containing its tokenized version. More info at [Encoding Data](#encoding-data)
-- `tests/`: Unit tests (There are only tests for tokenizer as per now)
+- `tests/`: Unit tests (There are only tests for the tokenizer for now)
 - `tokenizer/`: Custom tokenizer implementation (see [tokenizer/README.md](tokenizer/README.md) for details)
 
 ## Usage
@@ -66,7 +73,7 @@ python trainer.py --training_data_path path/to/data --vocab_size 50000 [other op
 ```
 
 Key training parameters:
-- `--training_data_path`: Path to the tokenized training data (required)
+- `--training_data_path`: Path to the tokenized training data (it expects a single pickle file containing tokenized data) (required)
 - `--batch_size`: Batch size for training (default: 512)
 - `--context_len`: Context window size (default: 1024)
 - `--embed_dim`: Embedding dimension (default: 512)
@@ -82,7 +89,7 @@ Key training parameters:
 - `--logging_steps`: Loss will be logged every {logging_steps} steps (default: 100)
 - `--eval_steps`: Model's current best state will be saved every {eval_steps} steps (default: 500)
 
-This will create a model checkpoint in checkpoints/{exp_name}/model.pth and also save few of the model's important properties in checkpoints/{exp_name}/config.json
+This will create a model checkpoint in checkpoints/{exp_name}/model.pth and also save few of the model's important properties in checkpoints/{exp_name}/config.json. <br> TensorBoard logs will be stored at tensorboard_logs/{exp_name} folder.
 
 ### Inference
 
